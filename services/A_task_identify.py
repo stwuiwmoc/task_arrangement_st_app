@@ -193,6 +193,13 @@ def parse_onenote_output(
             )
             continue
 
+        # サブタスク簡易パターンにマッチするが、詳細パターンにマッチしない場合はエラー出力
+        m_sub_simple = re.match(r"^\t(#\d{3})\s", line)
+        if m_sub_simple and not m_sub:
+            msg =\
+                f"サブタスク行の要素数不一致: {current_task_id} {current_task_name} {line.strip()}"
+            raise ValueError(msg)
+
     return tasks
 
 # --- 照合処理 ---
