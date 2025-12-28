@@ -70,9 +70,24 @@ def WillDo_display_settings(
         if col == "状態":
             col_def["cellEditor"] = "agSelectCellEditor"
             col_def["cellEditorParams"] = {
-                "values": ["済", "不要", "後回", "", "1着", "済2", "2着", "済3"]
+                "values": ["今", "済","着手", "不要", "後回", ""]
             }
+        # タスクID列なら太字表示
+        if col == "タスクID":
+            col_def["cellStyle"] = {"fontWeight": "bold"}
         columnDefs.append(col_def)
+
+    # 行スタイル設定（状態列が「今」の行は背景色変更）
+    row_style_jscode = st_aggrid.JsCode("""
+        function(params) {
+            if (params.data.状態 == "今") {
+                return {
+                    'color': 'black',
+                    'backgroundColor': '#ffff66'
+                };
+            }
+        }
+        """)
 
     gridOptions = {
         "columnDefs": columnDefs,
@@ -81,7 +96,8 @@ def WillDo_display_settings(
             "sortable": True,
             "filter": use_filter,
             "editable": True
-        }
+        },
+        "getRowStyle": row_style_jscode,
     }
 
     aggrid_ret = st_aggrid.AgGrid(
@@ -92,7 +108,7 @@ def WillDo_display_settings(
         key="willdo_aggrid",
         fit_columns_on_grid_load=False,
         enable_enterprise_modules=False,
-        allow_unsafe_jscode=False,
+        allow_unsafe_jscode=True,
         width="stretch",
         editable=True,
     )
@@ -105,9 +121,10 @@ if __name__ == "__main__":
     task_view.task_sidebar()
 
     # 表示モード選択
+    ESS_dt = Task_def.get_ESS_dt()
     mode = st.radio(
         "表示モード",
-        [f"本日分（{datetime.now().month}/{datetime.now().day}）表示", "過去分表示"],
+        [f"本日分（{ESS_dt.month}/{ESS_dt.day}）表示", "過去分表示"],
         horizontal=True, label_visibility="collapsed")
 
     if mode == "過去分表示":
@@ -138,7 +155,7 @@ if __name__ == "__main__":
 
     else:
         # 本日分のWill-doリストcsv表示
-        selected_str = datetime.now().date().strftime("%y%m%d")
+        selected_str = ESS_dt.strftime("%y%m%d")
 
         willdo_dir = os.path.join("data", "WillDo")
         willdo_file = os.path.join(willdo_dir, f"WillDo{selected_str}.csv")

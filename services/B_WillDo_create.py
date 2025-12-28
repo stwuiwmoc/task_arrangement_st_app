@@ -44,8 +44,9 @@ def create_new_WillDo_with_DailyTasks():
     WillDo_df = add_WillDo_Tasks(WillDo_df, Daily_tasks_dict)
 
     # Will-doリストDataFrameを保存 ファイル名: data/WillDo/WillDoyymmdd.csv
+    ESS_dt_str = Task_def.get_ESS_dt().strftime('%y%m%d')
     willdo_file_path = os.path.join(
-        "data", "WillDo", f"WillDo{datetime.now().strftime('%y%m%d')}.csv")
+        "data", "WillDo", f"WillDo{ESS_dt_str}.csv")
     WillDo_df.to_csv(willdo_file_path, index=False, encoding="utf-8-sig")
     return
 
@@ -57,8 +58,9 @@ def add_WillDo_all_ProjectTasks() -> None:
     Returns:
         None
     """
+    ESS_dt_str = Task_def.get_ESS_dt().strftime('%y%m%d')
     WillDo_df = pd.read_csv(
-        os.path.join("data", "WillDo", f"WillDo{datetime.now().strftime('%y%m%d')}.csv"),
+        os.path.join("data", "WillDo", f"WillDo{ESS_dt_str}.csv"),
         encoding="utf-8-sig")
 
     project_active_dir = os.path.join("data", "Project", "Active")
@@ -66,7 +68,7 @@ def add_WillDo_all_ProjectTasks() -> None:
     WillDo_df = add_WillDo_Tasks(WillDo_df, Project_tasks_dict)
 
     WillDo_df.to_csv(
-        os.path.join("data", "WillDo", f"WillDo{datetime.now().strftime('%y%m%d')}.csv"),
+        os.path.join("data", "WillDo", f"WillDo{ESS_dt_str}.csv"),
         index=False, encoding="utf-8-sig")
 
     return WillDo_df
@@ -88,8 +90,9 @@ def add_WillDo_Task_with_ID(
     """
 
     # Will-doリストcsvを読み込み
+    ESS_dt_str = Task_def.get_ESS_dt().strftime('%y%m%d')
     WillDo_df = pd.read_csv(
-        os.path.join("data", "WillDo", f"WillDo{datetime.now().strftime('%y%m%d')}.csv"),
+        os.path.join("data", "WillDo", f"WillDo{ESS_dt_str}.csv"),
         encoding="utf-8-sig")
 
     # タスクIDとサブタスクIDからWillDoEntryを生成
@@ -105,7 +108,7 @@ def add_WillDo_Task_with_ID(
 
     # Will-doリストDataFrameを保存
     WillDo_df.to_csv(
-        os.path.join("data", "WillDo", f"WillDo{datetime.now().strftime('%y%m%d')}.csv"),
+        os.path.join("data", "WillDo", f"WillDo{ESS_dt_str}.csv"),
         index=False, encoding="utf-8-sig")
     return
 
@@ -125,8 +128,9 @@ def add_WillDo_meeting(
         None
     """
     # Will-doリストcsvを読み込み
+    ESS_dt_str = Task_def.get_ESS_dt().strftime('%y%m%d')
     WillDo_df = pd.read_csv(
-        os.path.join("data", "WillDo", f"WillDo{datetime.now().strftime('%y%m%d')}.csv"),
+        os.path.join("data", "WillDo", f"WillDo{ESS_dt_str}.csv"),
         encoding="utf-8-sig")
 
     # オーダ情報取得
@@ -143,7 +147,7 @@ def add_WillDo_meeting(
         subtask_name="",
         estimated_time=0,
         daily_work_time=None,
-        deadline_date_nearest=datetime.now().strftime('%Y-%m-%d')
+        deadline_date_nearest=Task_def.get_ESS_dt().strftime('%Y-%m-%d')
     )
 
     # Will-doリストDataFrameに追加
@@ -156,7 +160,7 @@ def add_WillDo_meeting(
 
     # Will-doリストDataFrameを保存
     WillDo_df.to_csv(
-        os.path.join("data", "WillDo", f"WillDo{datetime.now().strftime('%y%m%d')}.csv"),
+        os.path.join("data", "WillDo", f"WillDo{ESS_dt_str}.csv"),
         index=False, encoding="utf-8-sig")
     return
 
@@ -212,7 +216,7 @@ def get_dates_since_date(date: datetime) -> list[datetime]:
     Returns:
         list[datetime]: 指定日翌日から今日までの各日付（datetime.date型）のリスト。
     """
-    today = datetime.now().date()
+    today = Task_def.get_ESS_dt().date()
     date_list = []
     d = date.date() + timedelta(days=1)
     while d <= today:
