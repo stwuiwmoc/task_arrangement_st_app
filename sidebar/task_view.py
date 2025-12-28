@@ -183,7 +183,7 @@ def task_sidebar():
                     st.warning("サブタスク名とサブ順序は必須です。")
                 else:
                     try:
-                        sort_index_val = int(new_sort_index)
+                        sort_index_val = float(new_sort_index)
                     except ValueError:
                         st.warning("サブ順序は数値で入力してください。")
                     else:
