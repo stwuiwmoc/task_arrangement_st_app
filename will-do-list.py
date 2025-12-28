@@ -72,6 +72,9 @@ def WillDo_display_settings(
             col_def["cellEditorParams"] = {
                 "values": ["済", "不要", "後回", "", "1着", "済2", "2着", "済3"]
             }
+        # タスクID列なら太字表示
+        if col == "タスクID":
+            col_def["cellStyle"] = {"fontWeight": "bold"}
         columnDefs.append(col_def)
 
     gridOptions = {
