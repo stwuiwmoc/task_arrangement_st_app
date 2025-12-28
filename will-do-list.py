@@ -77,6 +77,18 @@ def WillDo_display_settings(
             col_def["cellStyle"] = {"fontWeight": "bold"}
         columnDefs.append(col_def)
 
+    # 行スタイル設定（状態列が「今」の行は背景色変更）
+    row_style_jscode = st_aggrid.JsCode("""
+        function(params) {
+            if (params.data.状態 == "今") {
+                return {
+                    'color': 'black',
+                    'backgroundColor': '#ffff66'
+                };
+            }
+        }
+        """)
+
     gridOptions = {
         "columnDefs": columnDefs,
         "defaultColDef": {
@@ -84,7 +96,8 @@ def WillDo_display_settings(
             "sortable": True,
             "filter": use_filter,
             "editable": True
-        }
+        },
+        "getRowStyle": row_style_jscode,
     }
 
     aggrid_ret = st_aggrid.AgGrid(
@@ -95,7 +108,7 @@ def WillDo_display_settings(
         key="willdo_aggrid",
         fit_columns_on_grid_load=False,
         enable_enterprise_modules=False,
-        allow_unsafe_jscode=False,
+        allow_unsafe_jscode=True,
         width="stretch",
         editable=True,
     )
