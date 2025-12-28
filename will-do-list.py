@@ -105,9 +105,10 @@ if __name__ == "__main__":
     task_view.task_sidebar()
 
     # 表示モード選択
+    ESS_dt = Task_def.get_ESS_dt()
     mode = st.radio(
         "表示モード",
-        [f"本日分（{datetime.now().month}/{datetime.now().day}）表示", "過去分表示"],
+        [f"本日分（{ESS_dt.month}/{ESS_dt.day}）表示", "過去分表示"],
         horizontal=True, label_visibility="collapsed")
 
     if mode == "過去分表示":
@@ -138,7 +139,7 @@ if __name__ == "__main__":
 
     else:
         # 本日分のWill-doリストcsv表示
-        selected_str = datetime.now().date().strftime("%y%m%d")
+        selected_str = ESS_dt.strftime("%y%m%d")
 
         willdo_dir = os.path.join("data", "WillDo")
         willdo_file = os.path.join(willdo_dir, f"WillDo{selected_str}.csv")

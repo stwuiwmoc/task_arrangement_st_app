@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 import pandas as pd
@@ -232,3 +233,12 @@ class OrderInformation:
         if not row.empty:
             return row.iloc[0]["order_fullname"]
         return ""
+
+def get_ESS_dt() -> datetime:
+    """ESS（勤務管理システム）と同じルールで現在日時を取得する。
+    具体的には、ESSの勤務日付は午前5時に切り替わるため、現在時刻から5時間引いた日時を返す。
+
+    Returns:
+        datetime: ESS基準の現在日時
+    """
+    return datetime.now() - timedelta(hours=5)
