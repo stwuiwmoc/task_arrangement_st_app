@@ -70,7 +70,7 @@ def WillDo_display_settings(
         if col == "状態":
             col_def["cellEditor"] = "agSelectCellEditor"
             col_def["cellEditorParams"] = {
-                "values": ["済", "不要", "後回", "", "1着", "済2", "2着", "済3"]
+                "values": ["今", "済","着手", "不要", "後回", ""]
             }
         # タスクID列なら太字表示
         if col == "タスクID":
