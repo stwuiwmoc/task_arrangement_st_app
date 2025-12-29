@@ -26,7 +26,7 @@ class TaskUpdateAction:
     subtask_field_name: str = None
     subtask_value_csv: any = None
     subtask_value_onenote: any = None
-    subtask_obj_onenote: Task_def.SubTask = None  # add（サブタスク追加）でのみ使用
+    subtask_row_onenote: dict = None  # add（サブタスク追加）でのみ使用（dict形式）
 
     order_number: str = None  # create_task時のみ使用
 
@@ -144,7 +144,7 @@ def parse_onenote_output(
                 task_id=current_task_id,
                 name=current_task_name,
                 order_number="",  # オーダー番号は後で設定
-                sub_tasks={},  # 辞書型で初期化
+                sub_tasks=Task_def.create_empty_subtask_df(),  # 空のDataFrame
             )
             continue
 
@@ -178,23 +178,26 @@ def parse_onenote_output(
             est_time = m_sub.group(6)
             sort_index = m_sub.group(7)
 
-            # サブタスクをタスクの辞書に追加
-            tasks[current_task_id].sub_tasks[sub_task_id] = Task_def.SubTask(
-                subtask_id=sub_task_id,
-                name=sub_task_name,
-                estimated_time=int(est_time),
-                actual_time=0,
-                deadline_date=deadline_date,
-                deadline_reason=deadline_reason,
-                is_initial=(flag[0] in ['d']),  # d=当初作業, a=追加作業
-                is_nominal=(flag[1] in ['n']),  # n=ノミナル, w=ワースト
-                sort_index=float(sort_index),
-                is_incomplete=True,
-            )
+            # サブタスクをタスクのDataFrameに追加（スキーマベースで辞書生成）
+            cols = Task_def.get_subtask_schema_columns()
+            subtask_row = {col: None for col in cols}
+            subtask_row.update({
+                "subtask_id": sub_task_id,
+                "name": sub_task_name,
+                "estimated_time": int(est_time),
+                "actual_time": 0,
+                "deadline_date": deadline_date,
+                "deadline_reason": deadline_reason,
+                "is_initial": (flag[0] in ['d']),  # d=当初作業, a=追加作業
+                "is_nominal": (flag[1] in ['n']),  # n=ノミナル, w=ワースト
+                "sort_index": float(sort_index),
+                "is_incomplete": True,
+            })
+            tasks[current_task_id].add_subtask(subtask_row)
             continue
 
         # サブタスク簡易パターンにマッチするが、詳細パターンにマッチしない場合はエラー出力
-        m_sub_simple = re.match(r"^\t(#\d{3})\s", line)
+        m_sub_simple = re.match(r"^\t(#\d{3})\s*", line)
         if m_sub_simple and not m_sub:
             msg =\
                 f"サブタスク行の要素数不一致: {current_task_id} {current_task_name} {line.strip()}"
@@ -248,13 +251,13 @@ def compare_tasks(
                     task_name_csv=onenote_task.name
                 ))
                 # サブタスクはすべてaddで登録
-                for subtask_id, subtask in onenote_task.sub_tasks.items():
+                for _, subtask_row in onenote_task.sub_tasks.iterrows():
                     update_actions.append(TaskUpdateAction(
                         action_type="add",
                         task_id=onenote_task_id,
                         task_name_csv=onenote_task.name,
-                        subtask_id=subtask.subtask_id,
-                        subtask_obj_onenote=subtask
+                        subtask_id=subtask_row["subtask_id"],
+                        subtask_row_onenote=subtask_row.to_dict()
                     ))
                 continue
 
@@ -265,32 +268,37 @@ def compare_tasks(
         else:
             csv_task = csv_tasks[onenote_task_id]
 
-        csv_subtask_dict = csv_task.sub_tasks
-        onenote_subtask_dict = onenote_task.sub_tasks
+        csv_subtask_df = csv_task.sub_tasks
+        onenote_subtask_df = onenote_task.sub_tasks
+        csv_subtask_ids = set(csv_subtask_df["subtask_id"].tolist()) if not csv_subtask_df.empty else set()
+        onenote_subtask_ids = set(onenote_subtask_df["subtask_id"].tolist()) if not onenote_subtask_df.empty else set()
 
-        for onenote_subtask_id, onenote_subtask in onenote_subtask_dict.items():
+        for _, onenote_subtask_row in onenote_subtask_df.iterrows():
+            onenote_subtask_id = onenote_subtask_row["subtask_id"]
 
             # CSVに存在しないサブタスクは追加対象
-            if onenote_subtask_id not in csv_subtask_dict:
+            if onenote_subtask_id not in csv_subtask_ids:
                 update_actions.append(TaskUpdateAction(
                     action_type="add",
                     task_id=onenote_task_id,
                     task_name_csv=csv_task.name,
-                    subtask_id=onenote_subtask.subtask_id,
-                    subtask_obj_onenote=onenote_subtask
+                    subtask_id=onenote_subtask_id,
+                    subtask_row_onenote=onenote_subtask_row.to_dict()
                 ))
                 continue
 
             # CSVとOneNote両方にあるサブタスクは属性値を比較
             else:
-                csv_subtask = csv_subtask_dict[onenote_subtask_id]
-                for field_name, field_obj in Task_def.SubTask.__dataclass_fields__.items():
+                csv_subtask_row = csv_subtask_df[csv_subtask_df["subtask_id"] == onenote_subtask_id].iloc[0]
+                for field_name in ["name", "estimated_time", "deadline_date", "deadline_reason", "is_initial", "is_nominal", "sort_index", "is_incomplete"]:
 
-                    # subtask_idとactual_timeは比較不要
-                    if field_name in ("subtask_id", "actual_time"):
-                        continue
-                    csv_value = getattr(csv_subtask, field_name)
-                    onenote_value = getattr(onenote_subtask, field_name)
+                    csv_value = csv_subtask_row[field_name]
+                    onenote_value = onenote_subtask_row[field_name]
+
+                    # deadline_date, deadline_reasonは両方None/NaNの場合は同じと見なす
+                    if field_name in ("deadline_date", "deadline_reason"):
+                        if pd.isna(csv_value) and pd.isna(onenote_value):
+                            continue  # 両方Noneなので差分なし
 
                     # 値が異なる場合は更新対象
                     if csv_value != onenote_value:
@@ -298,26 +306,27 @@ def compare_tasks(
                             action_type="update_subtask_field",
                             task_id=onenote_task_id,
                             task_name_csv=csv_task.name,
-                            subtask_id=csv_subtask.subtask_id,
-                            subtask_name_csv=csv_subtask.name,
+                            subtask_id=onenote_subtask_id,
+                            subtask_name_csv=csv_subtask_row["name"],
                             subtask_field_name=field_name,
                             subtask_value_csv=csv_value,
                             subtask_value_onenote=onenote_value,
                         ))
 
-        for csv_subtask_id in csv_subtask_dict:
+        for _, csv_subtask_row in csv_subtask_df.iterrows():
+            csv_subtask_id = csv_subtask_row["subtask_id"]
 
             # OneNote出力に存在しない、かつ未完了状態であるサブタスクは完了扱い
             if (
-                csv_subtask_id not in onenote_subtask_dict
-                and getattr(csv_subtask_dict[csv_subtask_id], "is_incomplete", True)
+                csv_subtask_id not in onenote_subtask_ids
+                and csv_subtask_row.get("is_incomplete", True)
             ):
                 update_actions.append(TaskUpdateAction(
                     action_type="complete",
                     task_id=onenote_task_id,
                     task_name_csv=csv_task.name,
-                    subtask_id=csv_subtask_dict[csv_subtask_id].subtask_id,
-                    subtask_name_csv=csv_subtask_dict[csv_subtask_id].name,
+                    subtask_id=csv_subtask_id,
+                    subtask_name_csv=csv_subtask_row["name"],
                 ))
 
         # タスク名の比較
@@ -358,19 +367,19 @@ def compare_tasks(
         # csv_task_idがonenote_task_idの中に存在しない場合
         if csv_task_id not in onenote_tasks:
             # すべての未完了サブタスクに対して未完了フラグをFalseにするupdate_actionを追加
-            for subtask in csv_task.sub_tasks.values():
-                if getattr(subtask, "is_incomplete", True):
+            for _, subtask_row in csv_task.sub_tasks.iterrows():
+                if subtask_row.get("is_incomplete", True):
                     update_actions.append(TaskUpdateAction(
                         action_type="complete",
                         task_id=csv_task_id,
                         task_name_csv=csv_task.name,
-                        subtask_id=subtask.subtask_id,
-                        subtask_name_csv=subtask.name,
+                        subtask_id=subtask_row["subtask_id"],
+                        subtask_name_csv=subtask_row["name"],
                     ))
 
         # すべてのサブタスクで未完了フラグがFalseならタスクをCompleteフォルダに移動するupdate_actionを追加
-        incomplete_count = sum(st.is_incomplete for st in csv_task.sub_tasks.values())
-        if incomplete_count == 0 or all(not st.is_incomplete for st in csv_task.sub_tasks.values()):
+        incomplete_count = csv_task.sub_tasks["is_incomplete"].sum() if not csv_task.sub_tasks.empty else 0
+        if incomplete_count == 0 or (not csv_task.sub_tasks.empty and not csv_task.sub_tasks["is_incomplete"].any()):
             update_actions.append(TaskUpdateAction(
                 action_type="move_to_complete",
                 task_id=csv_task_id,
@@ -401,8 +410,9 @@ def make_df_from_TaskUpdateActions(
             dict: {'text': 確認文面, 'csv': csv側の値, 'onenote': onenote側の値}
         """
         if action.action_type == "add":
+            subtask_name = action.subtask_row_onenote.get('name', '') if action.subtask_row_onenote else ''
             return {
-                "text": f"「{action.task_id} {action.task_name_csv}」に「{action.subtask_id} {getattr(action.subtask_obj_onenote, 'name', '')}」を追加します",
+                "text": f"「{action.task_id} {action.task_name_csv}」に「{action.subtask_id} {subtask_name}」を追加します",
                 "csv": "",
                 "onenote": ""
             }
@@ -413,7 +423,7 @@ def make_df_from_TaskUpdateActions(
                 "onenote": ""
             }
         elif action.action_type == "update_subtask_field":
-            label = Task_def.SubTask.attr_map(action.subtask_field_name)
+            label = Task_def.SubTaskSchema.attr_map(action.subtask_field_name)
             return {
                 "text": f"「{action.task_id} {action.task_name_csv}」の「{action.subtask_id} {action.subtask_name_csv}」の「{label}」を更新しますか？",
                 "csv": action.subtask_value_csv,
@@ -515,7 +525,7 @@ def convert_df_to_TaskUpdateActions(
                 task_waiting_date_onenote=row.get("task_waiting_date_onenote"),
                 subtask_id=row.get("subtask_id"),
                 subtask_name_csv=row.get("subtask_name_csv"),
-                subtask_obj_onenote=row.get("subtask_obj_onenote"),
+                subtask_row_onenote=row.get("subtask_row_onenote"),
                 subtask_field_name=row.get("subtask_field_name"),
                 subtask_value_csv=row.get("subtask_value_csv"),
                 subtask_value_onenote=row.get("subtask_value_onenote"),
@@ -550,15 +560,16 @@ def apply_update_actions(update_actions: list[TaskUpdateAction], csv_folder: str
 
     def _complete_subtask_in_csv(task_obj, subtask_id, task_id):
         """サブタスクを完了扱いにして保存"""
-        if subtask_id in task_obj.sub_tasks:
-            task_obj.sub_tasks[subtask_id].is_incomplete = False
+        mask = task_obj.sub_tasks["subtask_id"] == subtask_id
+        if mask.any():
+            task_obj.sub_tasks.loc[mask, "is_incomplete"] = False
             task_obj.save_to_csv()
             print(f"{task_id} のサブタスク {subtask_id} を完了扱いにしました")
 
     def _update_subtask_field_in_csv(task_obj, subtask_id, field_name, new_value, task_id):
         """サブタスクの指定フィールドを更新して保存"""
-        if subtask_id in task_obj.sub_tasks:
-            subtask = task_obj.sub_tasks[subtask_id]
+        mask = task_obj.sub_tasks["subtask_id"] == subtask_id
+        if mask.any():
             # 型変換
             if field_name in ("is_initial", "is_nominal", "is_incomplete"):
                 val = bool(new_value)
@@ -566,11 +577,13 @@ def apply_update_actions(update_actions: list[TaskUpdateAction], csv_folder: str
                 val = float(new_value)
             elif field_name == "estimated_time":
                 val = int(new_value)
-            elif field_name in ("name", "deadline_date", "deadline_reason"):
+            elif field_name == "name":
                 val = "" if new_value is None else str(new_value)
+            elif field_name in ("deadline_date", "deadline_reason"):
+                val = None if (new_value is None or new_value == "" or pd.isna(new_value)) else str(new_value)
             else:
                 val = new_value
-            setattr(subtask, field_name, val)
+            task_obj.sub_tasks.loc[mask, field_name] = val
             task_obj.save_to_csv()
             print(f"{task_id} のサブタスク {subtask_id} の {field_name} を更新しました")
 
@@ -604,7 +617,7 @@ def apply_update_actions(update_actions: list[TaskUpdateAction], csv_folder: str
                 task_id=action.task_id,
                 name=action.task_name_csv,
                 order_number=order_number,
-                sub_tasks={},
+                sub_tasks=Task_def.create_empty_subtask_df(),
                 waiting_date=None
             )
             new_task.save_to_csv()
@@ -617,7 +630,7 @@ def apply_update_actions(update_actions: list[TaskUpdateAction], csv_folder: str
         if action.action_type == "add":
             _add_subtask_to_csv(
                 task_obj,
-                action.subtask_obj_onenote)
+                action.subtask_row_onenote)
 
         elif action.action_type == "update_subtask_field":
             _update_subtask_field_in_csv(

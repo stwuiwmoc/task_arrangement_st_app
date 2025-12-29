@@ -52,18 +52,18 @@ def task_sidebar():
 
         # サブタスク一覧表示
         subtask_dicts = []
-        for sub in task.sub_tasks.values():
+        for _, row in task.sub_tasks.iterrows():
             subtask_dicts.append({
-                "ID": sub.subtask_id,
-                "サブ名": sub.name,
-                "見込": sub.estimated_time,
-                "実績": sub.actual_time,
-                "〆切": sub.deadline_date,
-                "理由": sub.deadline_reason,
-                "当初": sub.is_initial,
-                "ノミナル": sub.is_nominal,
-                "順序": sub.sort_index,
-                "未完": sub.is_incomplete
+                "ID": row["subtask_id"],
+                "サブ名": row["name"],
+                "見込": row["estimated_time"],
+                "実績": row["actual_time"],
+                "〆切": row["deadline_date"],
+                "理由": row["deadline_reason"],
+                "当初": row["is_initial"],
+                "ノミナル": row["is_nominal"],
+                "順序": row["sort_index"],
+                "未完": row["is_incomplete"]
             })
         df = pd.DataFrame(subtask_dicts)
 
@@ -155,8 +155,8 @@ def task_sidebar():
         # --- サブタスク追加機能 ---
 
         # 最大サブID+1を自動設定
-        if task.sub_tasks:
-            max_subtask_id = max(int(sub.subtask_id[1:]) for sub in task.sub_tasks.values())
+        if not task.sub_tasks.empty:
+            max_subtask_id = max(int(sid[1:]) for sid in task.sub_tasks["subtask_id"].tolist())
         else:
             max_subtask_id = 0
         new_subtask_id = f"#{max_subtask_id+1:03d}"
@@ -187,19 +187,19 @@ def task_sidebar():
                     except ValueError:
                         st.warning("サブ順序は数値で入力してください。")
                     else:
-                        # SubTaskの自動設定
-                        new_subtask = Task_def.SubTask(
-                            subtask_id=new_subtask_id,
-                            name=new_name,
-                            estimated_time=15,
-                            actual_time=0,
-                            deadline_date=None,
-                            deadline_reason=None,
-                            is_initial=False,
-                            is_nominal=True,
-                            sort_index=sort_index_val,
-                            is_incomplete=True
-                        )
+                        # SubTaskの自動設定（スキーマベースで辞書生成）
+                        cols = Task_def.get_subtask_schema_columns()
+                        new_subtask = {col: None for col in cols}
+                        new_subtask.update({
+                            "subtask_id": new_subtask_id,
+                            "name": new_name,
+                            "estimated_time": 15,
+                            "actual_time": 0,
+                            "is_initial": False,
+                            "is_nominal": True,
+                            "sort_index": sort_index_val,
+                            "is_incomplete": True
+                        })
                         task.add_subtask(new_subtask)
                         task.save_to_csv()
                         st.success(f"サブタスク {new_subtask_id} を追加しました。")
@@ -283,11 +283,11 @@ def get_subtask_choices(task_id: str, include_subtask_name: bool) -> list[str]:
     choices = []
     if os.path.exists(csv_path):
         task = Task_def.read_task_csv(csv_path)
-        for sub in task.sub_tasks.values():
+        for _, row in task.sub_tasks.iterrows():
             if include_subtask_name:
-                label = f"{sub.subtask_id}：{sub.name}"
+                label = f"{row['subtask_id']}：{row['name']}"
             else:
-                label = sub.subtask_id
+                label = row["subtask_id"]
             choices.append(label)
     return choices
 
