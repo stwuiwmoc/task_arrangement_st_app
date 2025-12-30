@@ -87,10 +87,15 @@ class Task:
 
         # サブタスクを追加
         new_row = pd.DataFrame([subtask_row])
-        if self.sub_tasks.empty:
-            self.sub_tasks = new_row
-        else:
-            self.sub_tasks = pd.concat([self.sub_tasks, new_row], ignore_index=True)
+        try:
+            # 空または全てNAの列を除外して結合
+            new_row = new_row.dropna(how='all', axis=1)
+            if self.sub_tasks.empty:
+                self.sub_tasks = new_row
+            else:
+                self.sub_tasks = pd.concat([self.sub_tasks, new_row], ignore_index=True)
+        except Exception as e:
+            raise ValueError(f"Error while concatenating DataFrames: {e}")
 
     def save_to_csv(self) -> None:
         """

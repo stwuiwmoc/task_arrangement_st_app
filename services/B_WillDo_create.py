@@ -102,9 +102,15 @@ def add_WillDo_Task_with_ID(
     entry_dict = {
         Task_def.WillDoEntry.attr_map(k): v
         for k, v in asdict(WillDo_entry).items()}
-    WillDo_df = pd.concat(
-        [WillDo_df, pd.DataFrame([entry_dict])],
-        ignore_index=True)
+    try:
+        new_entry_df = pd.DataFrame([entry_dict])
+
+        # 空または全てNAの列を除外して結合
+        new_entry_df = new_entry_df.dropna(how='all', axis=1)
+        WillDo_df = pd.concat([WillDo_df, new_entry_df], ignore_index=True)
+
+    except Exception as e:
+        raise ValueError(f"Error while processing DataFrame: {e}")
 
     # Will-doリストDataFrameを保存
     WillDo_df.to_csv(
@@ -154,9 +160,17 @@ def add_WillDo_meeting(
     entry_dict = {
         Task_def.WillDoEntry.attr_map(k): v
         for k, v in asdict(meeting_entry).items()}
-    WillDo_df = pd.concat(
-        [WillDo_df, pd.DataFrame([entry_dict])],
-        ignore_index=True)
+
+    try:
+        new_entry_df = pd.DataFrame([entry_dict])
+
+        # 空または全てNAの列を除外して結合
+        new_entry_df = new_entry_df.dropna(how='all', axis=1)
+        WillDo_df = pd.concat(
+            [WillDo_df, new_entry_df],
+            ignore_index=True)
+    except Exception as e:
+        raise ValueError(f"Error while adding entry to WillDo_df: {e}")
 
     # Will-doリストDataFrameを保存
     WillDo_df.to_csv(
@@ -462,9 +476,16 @@ def add_WillDo_Tasks(WillDo_df: pd.DataFrame, Tasks_dict: Dict[str, Task_def.Tas
             entry_dict = {
                 Task_def.WillDoEntry.attr_map(k): v
                 for k, v in asdict(will_do_entry).items()}
-            WillDo_df = pd.concat(
-                [WillDo_df, pd.DataFrame([entry_dict])],
-                ignore_index=True)
+            try:
+                new_entry_df = pd.DataFrame([entry_dict])
+
+                # 空または全てNAの列を除外して結合
+                new_entry_df = new_entry_df.dropna(how='all', axis=1)
+                WillDo_df = pd.concat(
+                    [WillDo_df, new_entry_df],
+                    ignore_index=True)
+            except Exception as e:
+                raise ValueError(f"Error while adding entry to WillDo_df: {e}")
 
     return WillDo_df
 
