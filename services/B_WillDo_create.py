@@ -102,9 +102,15 @@ def add_WillDo_Task_with_ID(
     entry_dict = {
         Task_def.WillDoEntry.attr_map(k): v
         for k, v in asdict(WillDo_entry).items()}
-    WillDo_df = pd.concat(
-        [WillDo_df, pd.DataFrame([entry_dict])],
-        ignore_index=True)
+    try:
+        new_entry_df = pd.DataFrame([entry_dict])
+
+        # 空または全てNAの列を除外して結合
+        new_entry_df = new_entry_df.dropna(how='all', axis=1)
+        WillDo_df = pd.concat([WillDo_df, new_entry_df], ignore_index=True)
+
+    except Exception as e:
+        raise ValueError(f"Error while processing DataFrame: {e}")
 
     # Will-doリストDataFrameを保存
     WillDo_df.to_csv(
@@ -154,9 +160,17 @@ def add_WillDo_meeting(
     entry_dict = {
         Task_def.WillDoEntry.attr_map(k): v
         for k, v in asdict(meeting_entry).items()}
-    WillDo_df = pd.concat(
-        [WillDo_df, pd.DataFrame([entry_dict])],
-        ignore_index=True)
+
+    try:
+        new_entry_df = pd.DataFrame([entry_dict])
+
+        # 空または全てNAの列を除外して結合
+        new_entry_df = new_entry_df.dropna(how='all', axis=1)
+        WillDo_df = pd.concat(
+            [WillDo_df, new_entry_df],
+            ignore_index=True)
+    except Exception as e:
+        raise ValueError(f"Error while adding entry to WillDo_df: {e}")
 
     # Will-doリストDataFrameを保存
     WillDo_df.to_csv(
@@ -282,8 +296,7 @@ def complete_all_SubTasks_in_DailyTasks() -> None:
         if fname.endswith(".csv"):
             csv_path = os.path.join(daily_active_dir, fname)
             task = Task_def.read_task_csv(csv_path)
-            for subtask in task.sub_tasks.values():
-                subtask.is_incomplete = False
+            task.sub_tasks["is_incomplete"] = False
             task.save_to_csv()
     return
 
@@ -301,28 +314,34 @@ def add_DailyTasks_today_SubTask(
     """
     for task in Daily_tasks_dict.values():
         # サブタスクID #000をコピーしたサブタスクを追加するための準備
-        base_subtask = task.sub_tasks["#000"]
+        base_row = task.sub_tasks[task.sub_tasks["subtask_id"] == "#000"]
+        if base_row.empty:
+            continue
+        base_subtask = base_row.iloc[0]
 
         # サブタスクIDとサブタスク順序は、既存すべてのサブタスクの最大値+1とする
-        existing_subtask_ids = [int(s.subtask_id[1:]) for s in task.sub_tasks.values()]
-        existing_subtask_sort_indexes = [s.sort_index for s in task.sub_tasks.values()]
+        existing_subtask_ids = [int(sid[1:]) for sid in task.sub_tasks["subtask_id"].tolist()]
+        existing_subtask_sort_indexes = task.sub_tasks["sort_index"].tolist()
         new_subtask_id = f"#{max(existing_subtask_ids) + 1:03d}"
         new_sort_index = max(existing_subtask_sort_indexes) + 1
         # サブタスク名は、"コピー元サブタスク名yymmdd"とする
-        new_subtask_name = f"{base_subtask.name}{datetime.now().strftime('%y%m%d')}"
+        new_subtask_name = f"{base_subtask['name']}{datetime.now().strftime('%y%m%d')}"
 
-        copied_subtask = Task_def.SubTask(
-            subtask_id=new_subtask_id,
-            name=new_subtask_name,
-            estimated_time=base_subtask.estimated_time,
-            actual_time=base_subtask.actual_time,
-            deadline_date=datetime.now().strftime('%Y-%m-%d'),
-            deadline_reason=base_subtask.deadline_reason,
-            is_initial=base_subtask.is_initial,
-            is_nominal=base_subtask.is_nominal,
-            sort_index=new_sort_index,
-            is_incomplete=True
-        )
+        # スキーマベースで辞書生成
+        cols = Task_def.get_subtask_schema_columns()
+        copied_subtask = {col: None for col in cols}
+        copied_subtask.update({
+            "subtask_id": new_subtask_id,
+            "name": new_subtask_name,
+            "estimated_time": base_subtask["estimated_time"],
+            "actual_time": base_subtask["actual_time"],
+            "deadline_date": datetime.now().strftime('%Y-%m-%d'),
+            "deadline_reason": base_subtask["deadline_reason"],
+            "is_initial": base_subtask["is_initial"],
+            "is_nominal": base_subtask["is_nominal"],
+            "sort_index": new_sort_index,
+            "is_incomplete": True
+        })
         task.add_subtask(copied_subtask)
 
         # 更新したTaskオブジェクトをタスクCSVに保存
@@ -351,41 +370,45 @@ def ID_to_WillDoEntry(task_id: str, subtask_id: str) -> Task_def.WillDoEntry:
 
     # タスクとサブタスクを取得
     task = Task_def.read_task_csv(os.path.join(folder_path, f"{task_id}.csv"))
-    subtask = task.sub_tasks[subtask_id]
+    subtask_row = task.sub_tasks[task.sub_tasks["subtask_id"] == subtask_id]
+    if subtask_row.empty:
+        raise ValueError(f"サブタスク {subtask_id} が見つかりません")
+    subtask = subtask_row.iloc[0]
 
     # オーダ情報を取得
     Order_info = Task_def.OrderInformation()
 
     # 1. 未完了サブタスクをsort_index順に並べる
-    incomplete_subtasks = [s for s in task.sub_tasks.values() if s.is_incomplete]
-    sorted_incomplete = sorted(incomplete_subtasks, key=lambda s: s.sort_index)
+    incomplete_subtasks_df = task.sub_tasks[task.sub_tasks["is_incomplete"] == True].sort_values("sort_index")
+    incomplete_subtask_ids = incomplete_subtasks_df["subtask_id"].tolist()
 
     # 2. subtask_idより順番が小さい未完了サブタスクを除外
     try:
-        base_idx = [s.subtask_id for s in sorted_incomplete].index(subtask_id)
+        base_idx = incomplete_subtask_ids.index(subtask_id)
     except ValueError:
         base_idx = 0  # subtask_idが見つからない場合は先頭から
 
-    filtered_subtasks = sorted_incomplete[base_idx:]
+    filtered_subtasks_df = incomplete_subtasks_df.iloc[base_idx:]
 
     # 3. 残った未完了サブタスクの中で最も古い〆切日を持つサブタスクを特定
-    subtasks_with_deadline = [s for s in filtered_subtasks if s.deadline_date is not None]
-    if subtasks_with_deadline:
-        nearest_subtask = min(subtasks_with_deadline, key=lambda s: s.deadline_date)
-        nearest_deadline = datetime.strptime(nearest_subtask.deadline_date, "%Y-%m-%d").date()
-        nearest_subtask_id = nearest_subtask.subtask_id
+    subtasks_with_deadline_df = filtered_subtasks_df[filtered_subtasks_df["deadline_date"].notna()]
+    if not subtasks_with_deadline_df.empty:
+        nearest_row = subtasks_with_deadline_df.loc[subtasks_with_deadline_df["deadline_date"].idxmin()]
+        nearest_deadline = datetime.strptime(nearest_row["deadline_date"], "%Y-%m-%d").date()
+        nearest_subtask_id = nearest_row["subtask_id"]
 
         # 4. 3で取得したサブタスクより順番が大きい未完了サブタスクを除外
+        filtered_ids = filtered_subtasks_df["subtask_id"].tolist()
         try:
-            end_idx = [s.subtask_id for s in filtered_subtasks].index(nearest_subtask_id)
+            end_idx = filtered_ids.index(nearest_subtask_id)
         except ValueError:
-            end_idx = len(filtered_subtasks) - 1
-        target_subtasks = filtered_subtasks[:end_idx+1]
+            end_idx = len(filtered_ids) - 1
+        target_subtasks_df = filtered_subtasks_df.iloc[:end_idx+1]
 
         # 5. 4で取得したサブタスク全ての（見込み時間 - 実績時間）を合算
-        estimated_time_sum = sum(
-            s.estimated_time - s.actual_time for s in target_subtasks
-        ) if target_subtasks else 0
+        estimated_time_sum = (
+            target_subtasks_df["estimated_time"] - target_subtasks_df["actual_time"]
+        ).sum() if not target_subtasks_df.empty else 0
 
         # 今日から〆切日までの日本の祝日を除いた平日日数を取得
         today = datetime.now().date()
@@ -410,9 +433,9 @@ def ID_to_WillDoEntry(task_id: str, subtask_id: str) -> Task_def.WillDoEntry:
         nearest_subtask_id = None
 
         # 残りのサブタスク全ての（見込み時間 - 実績時間）を合算
-        estimated_time_per_day = sum(
-            s.estimated_time - s.actual_time for s in filtered_subtasks
-        ) if filtered_subtasks else 0
+        estimated_time_per_day = (
+            filtered_subtasks_df["estimated_time"] - filtered_subtasks_df["actual_time"]
+        ).sum() if not filtered_subtasks_df.empty else 0
 
     # WillDoEntryオブジェクトを生成して返す
     return Task_def.WillDoEntry(
@@ -420,10 +443,10 @@ def ID_to_WillDoEntry(task_id: str, subtask_id: str) -> Task_def.WillDoEntry:
         project_abbr=Order_info.get_project_abbr(task.order_number),
         order_abbr=Order_info.get_order_abbr(task.order_number),
         task_id=task.task_id,
-        subtask_id=subtask.subtask_id,
+        subtask_id=subtask["subtask_id"],
         task_name=task.name,
-        subtask_name=subtask.name,
-        estimated_time=subtask.estimated_time,
+        subtask_name=subtask["name"],
+        estimated_time=subtask["estimated_time"],
         daily_work_time=estimated_time_per_day,
         deadline_date_nearest=nearest_deadline
     )
@@ -445,17 +468,24 @@ def add_WillDo_Tasks(WillDo_df: pd.DataFrame, Tasks_dict: Dict[str, Task_def.Tas
         if task.waiting_date is not None:
             continue
         # 未完了かつ最もsort_indexが小さいサブタスクを抽出
-        incomplete_subtasks = [s for s in task.sub_tasks.values() if s.is_incomplete]
-        if incomplete_subtasks:
-            subtask = min(incomplete_subtasks, key=lambda s: s.sort_index)
-            will_do_entry = ID_to_WillDoEntry(task.task_id, subtask.subtask_id)
+        incomplete_subtasks_df = task.sub_tasks[task.sub_tasks["is_incomplete"] == True]
+        if not incomplete_subtasks_df.empty:
+            subtask_row = incomplete_subtasks_df.loc[incomplete_subtasks_df["sort_index"].idxmin()]
+            will_do_entry = ID_to_WillDoEntry(task.task_id, subtask_row["subtask_id"])
             # WillDoEntryをDataFrameに変換して追加
             entry_dict = {
                 Task_def.WillDoEntry.attr_map(k): v
                 for k, v in asdict(will_do_entry).items()}
-            WillDo_df = pd.concat(
-                [WillDo_df, pd.DataFrame([entry_dict])],
-                ignore_index=True)
+            try:
+                new_entry_df = pd.DataFrame([entry_dict])
+
+                # 空または全てNAの列を除外して結合
+                new_entry_df = new_entry_df.dropna(how='all', axis=1)
+                WillDo_df = pd.concat(
+                    [WillDo_df, new_entry_df],
+                    ignore_index=True)
+            except Exception as e:
+                raise ValueError(f"Error while adding entry to WillDo_df: {e}")
 
     return WillDo_df
 
