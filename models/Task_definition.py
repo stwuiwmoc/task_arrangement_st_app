@@ -88,8 +88,6 @@ class Task:
         # サブタスクを追加
         new_row = pd.DataFrame([subtask_row])
         try:
-            # 空または全てNAの列を除外して結合
-            new_row = new_row.dropna(how='all', axis=1)
             if self.sub_tasks.empty:
                 self.sub_tasks = new_row
             else:
