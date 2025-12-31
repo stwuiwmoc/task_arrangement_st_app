@@ -227,77 +227,77 @@ if __name__ == "__main__":
             else:
                 st.warning("「今」が複数行選択されています")
 
+            # タスクID・サブタスクID指定と会議名・オーダ指定でWillDo追加を横並びで表示
+            st.markdown("#### Will-doリストにタスクを追加", unsafe_allow_html=True)
+            col_add1, col_blank, col_add2 = st.columns([2, 1, 2])
+
+            with col_add1:
+                st.markdown("タスクID・サブタスクIDを指定", unsafe_allow_html=True)
+
+                # タスクID一覧を取得しセレクトボックスで選択
+                task_choices, task_id_to_csv = task_view.get_task_choices(
+                    choice_from_active=True,
+                    include_task_name=True)
+                task_id_label = st.selectbox(
+                    "タスクIDを選択", sorted(task_choices), key="willdo_taskid_selectbox", label_visibility="collapsed"
+                )
+                # ラベルからタスクIDのみ抽出
+                if task_choices:
+                    task_id_input = task_id_label.split("：")[0]
+                else:
+                    task_id_input = task_id_label
+
+                # サブタスクID一覧を取得しセレクトボックスで選択
+                subtask_choices = task_view.get_subtask_choices(task_id_input, include_subtask_name=True)
+                subtask_id_label = st.selectbox(
+                    "サブタスクIDを選択", subtask_choices, key="willdo_subtaskid_selectbox", label_visibility="collapsed"
+                )
+                # ラベルからサブタスクIDのみ抽出
+                if subtask_choices:
+                    subtask_id_input = subtask_id_label.split("：")[0]
+                else:
+                    subtask_id_input = subtask_id_label
+
+                # 追加ボタン押下でWillDoにタスク追加
+                add_btn = st.button("追加", key="willdo_add_btn")
+                if add_btn:
+                    if task_id_input and subtask_id_input:
+                        WillDo_create.add_WillDo_Task_with_ID(task_id_input, subtask_id_input)
+                        st.rerun()
+                    else:
+                        st.warning("タスクIDとサブタスクIDを両方入力してください")
+
+            # col_blankは何も表示しない（空白用）
+
+            with col_add2:
+                st.markdown("会議名・オーダを指定", unsafe_allow_html=True)
+                # OrderInformationクラスからオーダ番号一覧と略称取得
+                order_info = Task_def.OrderInformation()
+                order_numbers = order_info.df["order_number"].dropna().unique().tolist()
+                order_labels = []
+                order_number_map = {}
+                for order_number in order_numbers:
+                    pj_abbr = order_info.get_project_abbr(order_number)
+                    order_abbr = order_info.get_order_abbr(order_number)
+                    label = f"{pj_abbr} / {order_abbr}"
+                    order_labels.append(label)
+                    order_number_map[label] = order_number
+
+                meeting_name_input = st.text_input(
+                    "会議名", key="willdo_meetingname", placeholder="会議名", label_visibility="collapsed")
+                selected_label = st.selectbox(
+                    "オーダを選択", order_labels, key="willdo_order_selectbox", label_visibility="collapsed")
+                order_input = order_number_map[selected_label]
+                add_meeting_btn = st.button("追加", key="willdo_add_meeting_btn")
+                if add_meeting_btn:
+                    if meeting_name_input and order_input:
+                        WillDo_create.add_WillDo_meeting(meeting_name_input, order_input)
+                        st.rerun()
+                    else:
+                        st.warning("会議名とオーダを両方入力してください")
+
         else:
             st.info("Will-doリスト未作成です")
-
-        # タスクID・サブタスクID指定と会議名・オーダ指定でWillDo追加を横並びで表示
-        st.markdown("#### Will-doリストにタスクを追加", unsafe_allow_html=True)
-        col_add1, col_blank, col_add2 = st.columns([2, 1, 2])
-
-        with col_add1:
-            st.markdown("タスクID・サブタスクIDを指定", unsafe_allow_html=True)
-
-            # タスクID一覧を取得しセレクトボックスで選択
-            task_choices, task_id_to_csv = task_view.get_task_choices(
-                choice_from_active=True,
-                include_task_name=True)
-            task_id_label = st.selectbox(
-                "タスクIDを選択", sorted(task_choices), key="willdo_taskid_selectbox", label_visibility="collapsed"
-            )
-            # ラベルからタスクIDのみ抽出
-            if task_choices:
-                task_id_input = task_id_label.split("：")[0]
-            else:
-                task_id_input = task_id_label
-
-            # サブタスクID一覧を取得しセレクトボックスで選択
-            subtask_choices = task_view.get_subtask_choices(task_id_input, include_subtask_name=True)
-            subtask_id_label = st.selectbox(
-                "サブタスクIDを選択", subtask_choices, key="willdo_subtaskid_selectbox", label_visibility="collapsed"
-            )
-            # ラベルからサブタスクIDのみ抽出
-            if subtask_choices:
-                subtask_id_input = subtask_id_label.split("：")[0]
-            else:
-                subtask_id_input = subtask_id_label
-
-            # 追加ボタン押下でWillDoにタスク追加
-            add_btn = st.button("追加", key="willdo_add_btn")
-            if add_btn:
-                if task_id_input and subtask_id_input:
-                    WillDo_create.add_WillDo_Task_with_ID(task_id_input, subtask_id_input)
-                    st.rerun()
-                else:
-                    st.warning("タスクIDとサブタスクIDを両方入力してください")
-
-        # col_blankは何も表示しない（空白用）
-
-        with col_add2:
-            st.markdown("会議名・オーダを指定", unsafe_allow_html=True)
-            # OrderInformationクラスからオーダ番号一覧と略称取得
-            order_info = Task_def.OrderInformation()
-            order_numbers = order_info.df["order_number"].dropna().unique().tolist()
-            order_labels = []
-            order_number_map = {}
-            for order_number in order_numbers:
-                pj_abbr = order_info.get_project_abbr(order_number)
-                order_abbr = order_info.get_order_abbr(order_number)
-                label = f"{pj_abbr} / {order_abbr}"
-                order_labels.append(label)
-                order_number_map[label] = order_number
-
-            meeting_name_input = st.text_input(
-                "会議名", key="willdo_meetingname", placeholder="会議名", label_visibility="collapsed")
-            selected_label = st.selectbox(
-                "オーダを選択", order_labels, key="willdo_order_selectbox", label_visibility="collapsed")
-            order_input = order_number_map[selected_label]
-            add_meeting_btn = st.button("追加", key="willdo_add_meeting_btn")
-            if add_meeting_btn:
-                if meeting_name_input and order_input:
-                    WillDo_create.add_WillDo_meeting(meeting_name_input, order_input)
-                    st.rerun()
-                else:
-                    st.warning("会議名とオーダを両方入力してください")
 
         # Will-doリスト初期化操作を2カラムで表示（チェックボックス方式）
         st.markdown("#### Will-doリスト初期化", unsafe_allow_html=True)
