@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 from datetime import datetime
@@ -170,12 +171,64 @@ if __name__ == "__main__":
             if not edited_df.equals(df_today):
                 edited_df.to_csv(willdo_file, index=False, encoding="utf-8-sig")
 
+            # タイマー処理
+            # 状態列が"今"の行数を取得し、行数に応じた処理
+            now_count = edited_df[edited_df["状態"] == "今"].shape[0]
+            if now_count == 0:
+                st.write("「今」が選択されていません")
+            elif now_count == 1:
+                now_row = edited_df[edited_df["状態"] == "今"].iloc[0]
+                st.info(f"選択中：{now_row['タスクID']} {now_row['サブID']}「{now_row['タスク名']}」の「{now_row['サブ名']}」")
+                radio_minutes = [8, 15, now_row["見込み"], math.ceil(now_row["残時間/日"])]
+
+                col_timer1, col_timer2, col_timer3 = st.columns([8, 3, 5], border=True)
+
+                with col_timer1:
+                    # タイマー開始ボタン
+                    col_timer1_radio, col_timer1_btn = st.columns([6, 2])
+                    with col_timer1_radio:
+                        # ラジオボタンで選択肢を作成
+                        radio_options = [
+                            f"標準{radio_minutes[0]}分",
+                            f"標準{radio_minutes[1]}分",
+                            f"見込み{radio_minutes[2]}分",
+                            f"残時間{radio_minutes[3]}分"
+                        ]
+                        selected_idx = radio_options.index(
+                            st.radio(
+                                "タイマー選択", radio_options, key="willdo_timer_radio",
+                                horizontal=True, label_visibility="collapsed"
+                            )
+                        )
+                    with col_timer1_btn:
+                        if st.button(f"{radio_minutes[selected_idx]}分開始", key="willdo_timer1_btn", use_container_width=True):
+                            st.success("開始しました")
+
+                with col_timer2:
+                    # 続けて開始ボタン
+                    if st.button(f"続けて開始", key="willdo_timer2_btn", type="tertiary", use_container_width=True):
+                        st.success("開始しました")
+
+                with col_timer3:
+                    # 実績記録ボタン
+                    col_timer3_minute, col_timer3_btn = st.columns([2, 3])
+                    with col_timer3_minute:
+                        custom_minutes = st.number_input(
+                            "分数入力", step=1, key="minute_input", placeholder="分", label_visibility="collapsed", value=None
+                        )
+                        if custom_minutes is None:
+                            custom_minutes = 0
+                    with col_timer3_btn:
+                        if st.button(
+                            f"実績{custom_minutes}分記録",
+                            key="willdo_timer3_btn", use_container_width=True):
+                            st.success("記録しました")
+
+            else:
+                st.warning("「今」が複数行選択されています")
+
         else:
             st.info("Will-doリスト未作成です")
-
-        # タイマー処理関連
-        st.markdown("#### タイマー処理関連", unsafe_allow_html=True)
-        st.write("Step2でここに実装予定")
 
         # タスクID・サブタスクID指定と会議名・オーダ指定でWillDo追加を横並びで表示
         st.markdown("#### Will-doリストにタスクを追加", unsafe_allow_html=True)
