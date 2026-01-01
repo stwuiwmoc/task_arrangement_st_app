@@ -214,6 +214,11 @@ if __name__ == "__main__":
                 with col_timer2:
                     # 続けて開始ボタン
                     if st.button(f"続けて開始", key="willdo_timer2_btn", type="tertiary", use_container_width=True):
+                        Output_C.continuously_timer_and_record_WorkLog(
+                            willdo_date=selected_str,
+                            task_id=now_row["タスクID"],
+                            subtask_id=now_row["サブID"]
+                        )
                         st.success("開始しました")
 
                 with col_timer3:
