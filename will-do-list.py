@@ -9,7 +9,7 @@ import streamlit as st
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models.Task_definition as Task_def
-import services.B_WillDo_create as WillDo_create
+import services.B_WillDo_create as Output_B
 from sidebar import task_view
 
 
@@ -202,6 +202,7 @@ if __name__ == "__main__":
                         )
                     with col_timer1_btn:
                         if st.button(f"{radio_minutes[selected_idx]}分開始", key="willdo_timer1_btn", use_container_width=True):
+
                             st.success("開始しました")
 
                 with col_timer2:
@@ -262,7 +263,7 @@ if __name__ == "__main__":
                 add_btn = st.button("追加", key="willdo_add_btn")
                 if add_btn:
                     if task_id_input and subtask_id_input:
-                        WillDo_create.add_WillDo_Task_with_ID(task_id_input, subtask_id_input)
+                        Output_B.add_WillDo_Task_with_ID(task_id_input, subtask_id_input)
                         st.rerun()
                     else:
                         st.warning("タスクIDとサブタスクIDを両方入力してください")
@@ -291,7 +292,7 @@ if __name__ == "__main__":
                 add_meeting_btn = st.button("追加", key="willdo_add_meeting_btn")
                 if add_meeting_btn:
                     if meeting_name_input and order_input:
-                        WillDo_create.add_WillDo_meeting(meeting_name_input, order_input)
+                        Output_B.add_WillDo_meeting(meeting_name_input, order_input)
                         st.rerun()
                     else:
                         st.warning("会議名とオーダを両方入力してください")
@@ -323,10 +324,10 @@ if __name__ == "__main__":
                 # 実行後にkeyを変更してチェックボックスをリセット
                 st.session_state["willdo_chk_reset_id"] += 1
                 if chk_daily:
-                    WillDo_create.create_new_WillDo_with_DailyTasks()
+                    Output_B.create_new_WillDo_with_DailyTasks()
                     st.rerun()
                 elif chk_project:
-                    WillDo_create.add_WillDo_all_ProjectTasks()
+                    Output_B.add_WillDo_all_ProjectTasks()
                     st.rerun()
                 else:
                     st.info("何も実行されませんでした。")
