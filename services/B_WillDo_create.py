@@ -152,7 +152,7 @@ def add_WillDo_meeting(
         task_name=meeting_name,
         subtask_name="",
         estimated_time=0,
-        daily_work_time=None,
+        daily_work_time=0,
         deadline_date_nearest=Task_def.get_ESS_dt().strftime('%Y-%m-%d')
     )
 
