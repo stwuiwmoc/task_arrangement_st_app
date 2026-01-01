@@ -226,6 +226,24 @@ def continuously_timer_and_record_WorkLog(
     return
 
 
+def check_WorkLog_latest_end_datetime(willdo_date: str) -> datetime:
+
+    # 工数実績csvの最新の実績行を取得
+    worklog_csv_path = _get_worklog_csv_path(willdo_date)
+
+    if not os.path.exists(worklog_csv_path):
+        raise ValueError(f"工数実績csv '{worklog_csv_path}' が存在しません")
+
+    worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")
+    if worklog_df.empty:
+        raise ValueError(f"工数実績csv '{worklog_csv_path}' に実績行がありません")
+
+    last_row = worklog_df.iloc[-1]
+    last_end_time_str = last_row[WORKLOG_COLUMNS[8]]
+    last_end_time = datetime.strptime(last_end_time_str, "%Y-%m-%d %H:%M:%S")
+
+    return last_end_time
+
 # -------------------------------------------------------------
 # 上記の関数で使用する補助関数群
 # -------------------------------------------------------------

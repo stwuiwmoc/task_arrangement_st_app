@@ -214,12 +214,17 @@ if __name__ == "__main__":
                 with col_timer2:
                     # 続けて開始ボタン
                     if st.button(f"続けて開始", key="willdo_timer2_btn", type="tertiary", use_container_width=True):
-                        Output_C.continuously_timer_and_record_WorkLog(
-                            willdo_date=selected_str,
-                            task_id=now_row["タスクID"],
-                            subtask_id=now_row["サブID"]
-                        )
-                        st.success("開始しました")
+
+                        # 続けて開始ボタンを使えるのは、直前サブタスクの終了時刻がまだ来てない場合のみ
+                        if datetime.now() < Output_C.check_WorkLog_latest_end_datetime(selected_str):
+                            Output_C.continuously_timer_and_record_WorkLog(
+                                willdo_date=selected_str,
+                                task_id=now_row["タスクID"],
+                                subtask_id=now_row["サブID"]
+                            )
+                            st.success("開始しました")
+                        else:
+                            st.warning("直前のサブタスク終了時刻を過ぎているため、続けて開始できません。新規にタイマーを開始してください。")
 
                 with col_timer3:
                     # 実績記録ボタン
