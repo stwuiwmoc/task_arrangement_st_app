@@ -10,6 +10,7 @@ import streamlit as st
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models.Task_definition as Task_def
 import services.B_WillDo_create as Output_B
+import services.C_WorkLog_record as Output_C
 from sidebar import task_view
 
 
@@ -202,7 +203,12 @@ if __name__ == "__main__":
                         )
                     with col_timer1_btn:
                         if st.button(f"{radio_minutes[selected_idx]}分開始", key="willdo_timer1_btn", use_container_width=True):
-
+                            Output_C.start_new_timer_and_record_WorkLog(
+                                willdo_date=selected_str,
+                                timer_minutes=radio_minutes[selected_idx],
+                                task_id=now_row["タスクID"],
+                                subtask_id=now_row["サブID"]
+                            )
                             st.success("開始しました")
 
                 with col_timer2:
