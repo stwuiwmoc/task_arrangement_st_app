@@ -181,11 +181,11 @@ if __name__ == "__main__":
                 st.info(f"選択中：{now_row['タスクID']} {now_row['サブID']}「{now_row['タスク名']}」の「{now_row['サブ名']}」")
                 radio_minutes = [8, 15, now_row["見込み"], math.ceil(now_row["残時間/日"])]
 
-                col_timer1, col_timer2, col_timer3 = st.columns([8, 3, 5], border=True)
+                col_timer1, col_timer2, col_timer3 = st.columns([9, 3, 5], border=True)
 
                 with col_timer1:
                     # タイマー開始ボタン
-                    col_timer1_radio, col_timer1_btn = st.columns([6, 2])
+                    col_timer1_radio, col_timer1_btn = st.columns([6, 3])
                     with col_timer1_radio:
                         # ラジオボタンで選択肢を作成
                         radio_options = [
@@ -211,7 +211,7 @@ if __name__ == "__main__":
 
                 with col_timer3:
                     # 実績記録ボタン
-                    col_timer3_minute, col_timer3_btn = st.columns([2, 3])
+                    col_timer3_minute, col_timer3_btn = st.columns([2, 2])
                     with col_timer3_minute:
                         custom_minutes = st.number_input(
                             "分数入力", step=1, key="minute_input", placeholder="分", label_visibility="collapsed", value=None
@@ -220,7 +220,7 @@ if __name__ == "__main__":
                             custom_minutes = 0
                     with col_timer3_btn:
                         if st.button(
-                            f"実績{custom_minutes}分記録",
+                            f"{custom_minutes}分記録",
                             key="willdo_timer3_btn", use_container_width=True):
                             st.success("記録しました")
 
