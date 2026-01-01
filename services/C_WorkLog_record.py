@@ -105,9 +105,9 @@ def start_new_timer_and_record_WorkLog(
     return
 
 
-def continuously_timer_and_record_WorkLog(
+def continuously_start_and_record_WorkLog(
         willdo_date: str, task_id: str, subtask_id: str) -> None:
-    """2.3.2項 継続タイマー時刻を工数実績csvとタスクcsvに記録する関数
+    """2.3.2項 「続けて開始」した時にタスクcsvと工数実績csvの上書き・追加を行う関数
 
     既存の実績最終行の終了時刻を現在時刻に更新し、
     入力されたタスクの新規行を追加する。
@@ -227,6 +227,18 @@ def continuously_timer_and_record_WorkLog(
 
 
 def check_WorkLog_latest_end_datetime(willdo_date: str) -> datetime:
+    """工数実績csvの最終行の終了時刻をdatetime型で取得する
+
+    Args:
+        willdo_date (str): 呼び出し元のWillDoリストcsvの日付（YYMMDD形式）
+
+    Raises:
+        ValueError: 工数実績csvが存在しない場合
+        ValueError: 工数実績csvに実績行がない場合
+
+    Returns:
+        datetime: 工数実績csvの最終行の終了時刻のdatetimeオブジェクト
+    """
 
     # 工数実績csvの最新の実績行を取得
     worklog_csv_path = _get_worklog_csv_path(willdo_date)
