@@ -205,7 +205,7 @@ if __name__ == "__main__":
                         if st.button(f"{radio_minutes[selected_idx]}分開始", key="willdo_timer1_btn", use_container_width=True):
                             Output_C.start_new_timer_and_record_WorkLog(
                                 willdo_date=selected_str,
-                                timer_minutes=radio_minutes[selected_idx],
+                                timer_minutes=int(radio_minutes[selected_idx]),
                                 task_id=now_row["タスクID"],
                                 subtask_id=now_row["サブID"]
                             )
