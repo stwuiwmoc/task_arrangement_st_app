@@ -15,43 +15,9 @@ WORKLOG_COLUMNS = [
     "開始時刻", "終了時刻"
 ]
 
-
-def _get_task_csv_path(task_id: str) -> str:
-    """タスクIDからタスクCSVファイルのパスを構築する。
-
-    Args:
-        task_id (str): タスクID
-
-    Returns:
-        str: タスクCSVファイルのパス
-    """
-    if len(task_id) >= 6 and task_id[:6].isdigit():
-        folder_path = os.path.join("data", "Project", "Active")
-    else:
-        folder_path = os.path.join("data", "Daily", "Active")
-    return os.path.join(folder_path, f"{task_id}.csv")
-
-
-def _get_worklog_csv_path(willdo_date: str) -> str:
-    """willdo_dateから工数実績CSVファイルのパスを構築する。
-
-    Args:
-        willdo_date (str): WillDo日付（YYMMDD形式）
-
-    Returns:
-        str: 工数実績CSVファイルのパス
-    """
-    return os.path.join("data", "WorkLogs", f"工数実績{willdo_date}.csv")
-
-
-def _create_worklog_csv(file_path: str) -> None:
-    """空の工数実績CSVファイルを新規作成する。
-
-    Args:
-        file_path (str): 作成するファイルのパス
-    """
-    df = pd.DataFrame(columns=WORKLOG_COLUMNS)
-    df.to_csv(file_path, index=False, encoding="utf-8")
+# -------------------------------------------------------------
+# wordの各項と対応する関数
+# -------------------------------------------------------------
 
 
 def start_new_timer_and_record_WorkLog(
@@ -137,6 +103,47 @@ def start_new_timer_and_record_WorkLog(
     print(f"タイマー設定関数を呼び出します: {timer_minutes}分")
 
     return
+
+# -------------------------------------------------------------
+# 上記の関数で使用する補助関数群
+# -------------------------------------------------------------
+
+def _get_task_csv_path(task_id: str) -> str:
+    """タスクIDからタスクCSVファイルのパスを構築する。
+
+    Args:
+        task_id (str): タスクID
+
+    Returns:
+        str: タスクCSVファイルのパス
+    """
+    if len(task_id) >= 6 and task_id[:6].isdigit():
+        folder_path = os.path.join("data", "Project", "Active")
+    else:
+        folder_path = os.path.join("data", "Daily", "Active")
+    return os.path.join(folder_path, f"{task_id}.csv")
+
+
+def _get_worklog_csv_path(willdo_date: str) -> str:
+    """willdo_dateから工数実績CSVファイルのパスを構築する。
+
+    Args:
+        willdo_date (str): WillDo日付（YYMMDD形式）
+
+    Returns:
+        str: 工数実績CSVファイルのパス
+    """
+    return os.path.join("data", "WorkLogs", f"工数実績{willdo_date}.csv")
+
+
+def _create_worklog_csv(file_path: str) -> None:
+    """空の工数実績CSVファイルを新規作成する。
+
+    Args:
+        file_path (str): 作成するファイルのパス
+    """
+    df = pd.DataFrame(columns=WORKLOG_COLUMNS)
+    df.to_csv(file_path, index=False, encoding="utf-8")
 
 
 if __name__ == "__main__":
