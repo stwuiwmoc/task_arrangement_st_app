@@ -59,13 +59,61 @@ def start_new_timer_and_record_WorkLog(
     # 4-2. 終了時刻は、開始時刻にtimer_minutesを加算したものとする
     end_time = start_time + timedelta(minutes=timer_minutes)
 
+    # 4-3. 工数実績csvの既存の実績最終行に対する処理
+    worklog_csv_path = _get_worklog_csv_path(willdo_date)
+    try:
+        last_end_time = check_WorkLog_latest_end_datetime(willdo_date)
+        worklog_exists = True
+    except ValueError:
+        worklog_exists = False
+        last_end_time = None
+
+    if worklog_exists and last_end_time is not None:
+        # 開始時刻が最終行の終了時刻以降の場合、既存の実績最終行はそのまま
+        if start_time >= last_end_time:
+            pass  # 何もしない
+        else:
+            # 開始時刻が最終行の終了時刻より前の場合
+            worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")
+            last_row = worklog_df.iloc[-1]
+            last_task_id = last_row[WORKLOG_COLUMNS[3]]
+            last_subtask_id = last_row[WORKLOG_COLUMNS[4]]
+            last_start_time_str = last_row[WORKLOG_COLUMNS[7]]
+            last_start_time = datetime.strptime(last_start_time_str, "%Y-%m-%d %H:%M:%S")
+
+            # 既存の実績最終行のタスクcsvを更新
+            last_task_csv_path = _get_task_csv_path(last_task_id)
+            if os.path.exists(last_task_csv_path):
+                last_task = Task_def.read_task_csv(last_task_csv_path)
+                last_subtask_row = last_task.sub_tasks[last_task.sub_tasks["subtask_id"] == last_subtask_id]
+
+                if not last_subtask_row.empty:
+                    last_subtask_actual_time = int(last_subtask_row.iloc[0]["actual_time"])
+
+                    # サブタスク実績時間を更新
+                    # ※更新後の実績時間 = 既存の実績時間 - (既存の終了時刻 - 既存の開始時刻) + (新タスク開始時刻 - 既存の開始時刻)
+                    old_duration_minutes = int((last_end_time - last_start_time).total_seconds() / 60)
+                    new_duration_minutes = int((start_time - last_start_time).total_seconds() / 60)
+                    last_subtask_new_actual_time = last_subtask_actual_time - old_duration_minutes + new_duration_minutes
+
+                    last_subtask_index = last_task.sub_tasks[last_task.sub_tasks["subtask_id"] == last_subtask_id].index[0]
+                    last_task.sub_tasks.at[last_subtask_index, "actual_time"] = last_subtask_new_actual_time
+
+                    # タスクcsvを保存
+                    last_task.save_to_csv()
+
+            # 工数実績csvの既存の実績最終行の終了時刻を新タスク開始時刻に更新して保存
+            start_time_str_for_update = start_time.strftime("%Y-%m-%d %H:%M:%S")
+            worklog_df.at[worklog_df.index[-1], WORKLOG_COLUMNS[8]] = start_time_str_for_update
+            worklog_df.to_csv(worklog_csv_path, index=False, encoding="utf-8")
+
     # 時刻を 'YYYY-MM-DD HH:MM:SS' 形式の文字列に変換
     start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
 
     # 5. 工数実績csvに記録
     # 5-1. willdo_dateに対応する工数実績csvが存在するか確認
-    worklog_csv_path = _get_worklog_csv_path(willdo_date)
+    # (worklog_csv_pathは上で既に取得済み)
 
     # 5-2. 存在しない場合は新規作成
     if not os.path.exists(worklog_csv_path):
