@@ -182,7 +182,7 @@ if __name__ == "__main__":
                 st.info(f"選択中：{now_row['タスクID']} {now_row['サブID']}「{now_row['タスク名']}」の「{now_row['サブ名']}」")
                 radio_minutes = [8, 15, now_row["見込み"], math.ceil(now_row["残時間/日"])]
 
-                col_timer1, col_timer2, col_timer3 = st.columns([9, 3, 5], border=True)
+                col_timer1, col_timer2, col_record = st.columns([9, 3, 5], border=True)
 
                 with col_timer1:
                     # タイマー開始ボタン
@@ -226,19 +226,26 @@ if __name__ == "__main__":
                         else:
                             st.warning("直前のサブタスク終了時刻を過ぎているため、続けて開始できません。新規にタイマーを開始してください。")
 
-                with col_timer3:
+                with col_record:
                     # 実績記録ボタン
-                    col_timer3_minute, col_timer3_btn = st.columns([2, 2])
-                    with col_timer3_minute:
+                    col_record_minute, col_record_btn = st.columns([2, 2])
+                    with col_record_minute:
                         custom_minutes = st.number_input(
                             "分数入力", step=1, key="minute_input", placeholder="分", label_visibility="collapsed", value=None
                         )
                         if custom_minutes is None:
                             custom_minutes = 0
-                    with col_timer3_btn:
-                        if st.button(
+                    with col_record_btn:
+                        record_button = st.button(
                             f"{custom_minutes}分記録",
-                            key="willdo_timer3_btn", use_container_width=True):
+                            key="willdo_timer3_btn", use_container_width=True)
+                        if record_button:
+                            Output_C.record_completed_task_WorkLog(
+                                willdo_date=selected_str,
+                                achievement_minutes=int(custom_minutes),
+                                task_id=now_row["タスクID"],
+                                subtask_id=now_row["サブID"]
+                            )
                             st.success("記録しました")
 
             else:
@@ -287,7 +294,7 @@ if __name__ == "__main__":
             # col_blankは何も表示しない（空白用）
 
             with col_add2:
-                st.markdown("会議名・オーダを指定", unsafe_allow_html=True)
+                st.markdown("#### 打合せ実績を記録", unsafe_allow_html=True)
                 # OrderInformationクラスからオーダ番号一覧と略称取得
                 order_info = Task_def.OrderInformation()
                 order_numbers = order_info.df["order_number"].dropna().unique().tolist()
@@ -305,13 +312,30 @@ if __name__ == "__main__":
                 selected_label = st.selectbox(
                     "オーダを選択", order_labels, key="willdo_order_selectbox", label_visibility="collapsed")
                 order_input = order_number_map[selected_label]
-                add_meeting_btn = st.button("追加", key="willdo_add_meeting_btn")
-                if add_meeting_btn:
-                    if meeting_name_input and order_input:
-                        Output_B.add_WillDo_meeting(meeting_name_input, order_input)
-                        st.rerun()
-                    else:
-                        st.warning("会議名とオーダを両方入力してください")
+
+                col_add2_minute, col_add2_btn = st.columns([1, 2])
+                with col_add2_minute:
+                    meeting_minutes = st.number_input(
+                        "分数入力", step=1, key="willdo_meeting_minute_input", placeholder="分", label_visibility="collapsed", value=None
+                    )
+                    if meeting_minutes is None:
+                        meeting_minutes = 0
+                with col_add2_btn:
+                    meeting_record_btn = st.button(
+                        f"{meeting_minutes}分記録",
+                        key="willdo_add_meeting_minute_btn", use_container_width=True
+                    )
+                    if meeting_record_btn:
+                        if meeting_name_input and (meeting_minutes > 0):
+                            Output_C.record_completed_meeting_WorkLog(
+                                willdo_date=selected_str,
+                                achievement_minutes=int(meeting_minutes),
+                                meeting_name=meeting_name_input,
+                                order_number=order_input
+                            )
+                            st.info("記録しました")
+                        else:
+                            st.warning("会議名とオーダと分数を全て入力してください")
 
         else:
             st.info("Will-doリスト未作成です")
