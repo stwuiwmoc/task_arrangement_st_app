@@ -192,7 +192,7 @@ if __name__ == "__main__":
                         radio_options = [
                             f"標準{radio_minutes[0]}分",
                             f"標準{radio_minutes[1]}分",
-                            f"見込み{radio_minutes[2]}分",
+                            f"見込{radio_minutes[2]}分",
                             f"残時間{radio_minutes[3]}分"
                         ]
                         selected_idx = radio_options.index(
@@ -251,12 +251,11 @@ if __name__ == "__main__":
             else:
                 st.warning("「今」が複数行選択されています")
 
-            # タスクID・サブタスクID指定と会議名・オーダ指定でWillDo追加を横並びで表示
-            st.markdown("#### Will-doリストにタスクを追加", unsafe_allow_html=True)
-            col_add1, col_blank, col_add2 = st.columns([2, 1, 2])
+            # タスクID・サブタスクID指定と会議名・オーダ指定で実績記録操作を2カラムで表示
+            col_add1, col_blank, col_add2 = st.columns([9, 3, 5])
 
             with col_add1:
-                st.markdown("タスクID・サブタスクIDを指定", unsafe_allow_html=True)
+                st.markdown("#### Will-doリストにタスク追加", unsafe_allow_html=True)
 
                 # タスクID一覧を取得しセレクトボックスで選択
                 task_choices, task_id_to_csv = task_view.get_task_choices(
@@ -283,7 +282,9 @@ if __name__ == "__main__":
                     subtask_id_input = subtask_id_label
 
                 # 追加ボタン押下でWillDoにタスク追加
-                add_btn = st.button("追加", key="willdo_add_btn")
+                add_btn = st.button(
+                    f"{task_id_input} / {subtask_id_input} を追加",
+                    key="willdo_add_btn", use_container_width=True)
                 if add_btn:
                     if task_id_input and subtask_id_input:
                         Output_B.add_WillDo_Task_with_ID(task_id_input, subtask_id_input)
