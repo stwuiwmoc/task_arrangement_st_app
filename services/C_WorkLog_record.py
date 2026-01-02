@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 import models.Task_definition as Task_def
+import services.D_external_timer_boot as Output_D
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -66,8 +67,7 @@ def start_new_timer_and_record_WorkLog(
     )
 
     # 6. タイマー設定関数を呼び出し
-    # ここは後回し、別ファイルの関数を呼び出す形で実装予定
-    print(f"タイマー設定関数を呼び出します: {timer_minutes}分")
+    Output_D.send_timer_boot_email(timer_minutes)
 
     return
 
