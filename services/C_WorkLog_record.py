@@ -34,119 +34,38 @@ def start_new_timer_and_record_WorkLog(
     Raises:
         ValueError: サブタスクIDがタスクに存在しない場合
     """
-
-    # 1. タスクidのタスクcsvを読み込み
-    task_csv_path = _get_task_csv_path(task_id)
-    task = Task_def.read_task_csv(task_csv_path)
-
-    # 2. 読み込んだタスクcsvからオーダ番号、タスク名、サブタスクidに対応するサブタスク名、サブタスク実績時間を取得
-    order_number = task.order_number
-    task_name = task.name
-    subtask_row = task.sub_tasks[task.sub_tasks["subtask_id"] == subtask_id]
-    if subtask_row.empty:
-        raise ValueError(f"サブタスクID '{subtask_id}' がタスク '{task_id}' に見つかりません")
-    subtask_name = subtask_row.iloc[0]["name"]
-    subtask_actual_time = int(subtask_row.iloc[0]["actual_time"])
-
-    # 3. オーダ管理csvを読み込んで、オーダ番号に対応するオーダ略称とプロジェクト略称を取得
-    order_info = Task_def.OrderInformation()
-    order_abbr = order_info.get_order_abbr(order_number)
-    project_abbr = order_info.get_project_abbr(order_number)
-
-    # 4. 開始時刻と終了時刻を算出
-    # 4-1. 現在時刻を開始時刻とする
+    # 1. 開始時刻と終了時刻を算出
     start_time = datetime.now()
-    # 4-2. 終了時刻は、開始時刻にtimer_minutesを加算したものとする
-    end_time = start_time + timedelta(minutes=timer_minutes)
+    end_time = start_time + timedelta(minutes=int(timer_minutes))
 
-    # 4-3. 工数実績csvの既存の実績最終行に対する処理
-    worklog_csv_path = _get_worklog_csv_path(willdo_date)
-    try:
-        last_end_time = check_WorkLog_latest_end_datetime(willdo_date)
-        worklog_exists = True
-    except ValueError:
-        worklog_exists = False
-        last_end_time = None
+    # 2. 工数実績csvの既存の実績最終行に対する処理
+    _update_last_worklog_row_if_overlap(willdo_date, start_time)
 
-    if worklog_exists and last_end_time is not None:
-        # 開始時刻が最終行の終了時刻以降の場合、既存の実績最終行はそのまま
-        if start_time >= last_end_time:
-            pass  # 何もしない
-        else:
-            # 開始時刻が最終行の終了時刻より前の場合
-            worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")
-            last_row = worklog_df.iloc[-1]
-            last_task_id = last_row[WORKLOG_COLUMNS[3]]
-            last_subtask_id = last_row[WORKLOG_COLUMNS[4]]
-            last_start_time_str = last_row[WORKLOG_COLUMNS[7]]
-            last_start_time = datetime.strptime(last_start_time_str, "%Y-%m-%d %H:%M:%S")
+    # 3. 入力されたタスク情報を取得
+    task_info = _get_task_info_for_worklog(task_id, subtask_id)
 
-            # 既存の実績最終行のタスクcsvを更新
-            last_task_csv_path = _get_task_csv_path(last_task_id)
-            if os.path.exists(last_task_csv_path):
-                last_task = Task_def.read_task_csv(last_task_csv_path)
-                last_subtask_row = last_task.sub_tasks[last_task.sub_tasks["subtask_id"] == last_subtask_id]
+    # 4. 工数実績csvに新しい行を追加
+    _add_worklog_row(
+        willdo_date=willdo_date,
+        order_number=task_info["order_number"],
+        order_abbr=task_info["order_abbr"],
+        project_abbr=task_info["project_abbr"],
+        task_id=task_id,
+        subtask_id=subtask_id,
+        task_name=task_info["task_name"],
+        subtask_name=task_info["subtask_name"],
+        start_time=start_time,
+        end_time=end_time
+    )
 
-                if not last_subtask_row.empty:
-                    last_subtask_actual_time = int(last_subtask_row.iloc[0]["actual_time"])
+    # 5. タスクcsvにサブタスク実績時間を更新して保存
+    _update_subtask_actual_time(
+        task_id=task_id,
+        subtask_id=subtask_id,
+        additional_minutes=int(timer_minutes)
+    )
 
-                    # サブタスク実績時間を更新
-                    # ※更新後の実績時間 = 既存の実績時間 - (既存の終了時刻 - 既存の開始時刻) + (新タスク開始時刻 - 既存の開始時刻)
-                    old_duration_minutes = int((last_end_time - last_start_time).total_seconds() / 60)
-                    new_duration_minutes = int((start_time - last_start_time).total_seconds() / 60)
-                    last_subtask_new_actual_time = last_subtask_actual_time - old_duration_minutes + new_duration_minutes
-
-                    last_subtask_index = last_task.sub_tasks[last_task.sub_tasks["subtask_id"] == last_subtask_id].index[0]
-                    last_task.sub_tasks.at[last_subtask_index, "actual_time"] = last_subtask_new_actual_time
-
-                    # タスクcsvを保存
-                    last_task.save_to_csv()
-
-            # 工数実績csvの既存の実績最終行の終了時刻を新タスク開始時刻に更新して保存
-            start_time_str_for_update = start_time.strftime("%Y-%m-%d %H:%M:%S")
-            worklog_df.at[worklog_df.index[-1], WORKLOG_COLUMNS[8]] = start_time_str_for_update
-            worklog_df.to_csv(worklog_csv_path, index=False, encoding="utf-8")
-
-    # 時刻を 'YYYY-MM-DD HH:MM:SS' 形式の文字列に変換
-    start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
-    end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
-
-    # 5. 工数実績csvに記録
-    # 5-1. willdo_dateに対応する工数実績csvが存在するか確認
-    # (worklog_csv_pathは上で既に取得済み)
-
-    # 5-2. 存在しない場合は新規作成
-    if not os.path.exists(worklog_csv_path):
-        _create_worklog_csv(worklog_csv_path)
-
-    # 5-3. 工数実績csvに新しい行を追加
-    worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")
-    new_row = pd.DataFrame([{
-        WORKLOG_COLUMNS[0]: order_number,
-        WORKLOG_COLUMNS[1]: order_abbr,
-        WORKLOG_COLUMNS[2]: project_abbr,
-        WORKLOG_COLUMNS[3]: task_id,
-        WORKLOG_COLUMNS[4]: subtask_id,
-        WORKLOG_COLUMNS[5]: task_name,
-        WORKLOG_COLUMNS[6]: subtask_name,
-        WORKLOG_COLUMNS[7]: start_time_str,
-        WORKLOG_COLUMNS[8]: end_time_str
-    }])
-    worklog_df = pd.concat([worklog_df, new_row], ignore_index=True)
-
-    # 5-4. csvを保存
-    worklog_df.to_csv(worklog_csv_path, index=False, encoding="utf-8")
-
-    # 6. タスクcsvにサブタスク実績時間を更新して保存
-    # 6-1. サブタスク実績時間にtimer_minutesを加算
-    new_actual_time = subtask_actual_time + timer_minutes
-
-    # 6-2. サブタスク実績時間を更新してタスクcsvを保存
-    subtask_index = task.sub_tasks[task.sub_tasks["subtask_id"] == subtask_id].index[0]
-    task.sub_tasks.at[subtask_index, "actual_time"] = new_actual_time
-    task.save_to_csv()
-
-    # 7. タイマー設定関数を呼び出し
+    # 6. タイマー設定関数を呼び出し
     # ここは後回し、別ファイルの関数を呼び出す形で実装予定
     print(f"タイマー設定関数を呼び出します: {timer_minutes}分")
 
@@ -170,106 +89,44 @@ def continuously_start_and_record_WorkLog(
         ValueError: 工数実績csvに既存の実績行がない場合
         ValueError: サブタスクIDがタスクに存在しない場合
     """
-    # 現在時刻を取得
+    # 1. 開始時刻（現在時刻）を取得
     current_time = datetime.now()
 
-    # 1. 工数実績csvの既存の実績最終行に対する処理
-    # 1-1. 工数実績csvから既存の実績最終行のタスクid、サブタスクid、開始時刻、終了時刻を取得
-    worklog_csv_path = _get_worklog_csv_path(willdo_date)
-    if not os.path.exists(worklog_csv_path):
-        raise ValueError(f"工数実績csv '{worklog_csv_path}' が存在しません")
+    # 2. 既存の最終行の終了時刻（更新前）を取得
+    # ※check_WorkLog_latest_end_datetime内で存在確認・空チェックも行われる
+    last_end_time = check_WorkLog_latest_end_datetime(willdo_date)
 
-    worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")
-    if worklog_df.empty:
-        raise ValueError(f"工数実績csv '{worklog_csv_path}' に既存の実績行がありません")
+    # 3. 工数実績csvの既存の実績最終行に対する処理（overlapがあれば更新）
+    _update_last_worklog_row_if_overlap(willdo_date, current_time)
 
-    last_row = worklog_df.iloc[-1]
-    last_task_id = last_row[WORKLOG_COLUMNS[3]]
-    last_subtask_id = last_row[WORKLOG_COLUMNS[4]]
-    last_start_time_str = last_row[WORKLOG_COLUMNS[7]]
-    last_end_time_str = last_row[WORKLOG_COLUMNS[8]]
+    # 3. 入力されたタスク情報を取得
+    task_info = _get_task_info_for_worklog(task_id, subtask_id)
 
-    # 時刻文字列をdatetimeオブジェクトに変換
-    last_start_time = datetime.strptime(last_start_time_str, "%Y-%m-%d %H:%M:%S")
-    last_end_time = datetime.strptime(last_end_time_str, "%Y-%m-%d %H:%M:%S")
-
-    # 1-2. 既存の実績最終行のタスクcsvを更新
-    # 1-2-1. 既存の実績最終行のタスクid、サブタスクidに一致するサブタスクを取得
-    last_task_csv_path = _get_task_csv_path(last_task_id)
-    last_task = Task_def.read_task_csv(last_task_csv_path)
-
-    last_subtask_row = last_task.sub_tasks[last_task.sub_tasks["subtask_id"] == last_subtask_id]
-    if last_subtask_row.empty:
-        raise ValueError(f"サブタスクID '{last_subtask_id}' がタスク '{last_task_id}' に見つかりません")
-    last_subtask_actual_time = int(last_subtask_row.iloc[0]["actual_time"])
-
-    # 1-2-2. サブタスク実績時間を更新
-    # ※更新後の実績時間 = 既存の実績時間 - (既存の終了時刻 - 既存の開始時刻) + (現在時刻 - 既存の開始時刻)
-    old_duration_minutes = int((last_end_time - last_start_time).total_seconds() / 60)
-    new_duration_minutes = int((current_time - last_start_time).total_seconds() / 60)
-    last_subtask_new_actual_time = last_subtask_actual_time - old_duration_minutes + new_duration_minutes
-
-    last_subtask_index = last_task.sub_tasks[last_task.sub_tasks["subtask_id"] == last_subtask_id].index[0]
-    last_task.sub_tasks.at[last_subtask_index, "actual_time"] = last_subtask_new_actual_time
-    last_task.save_to_csv()
-
-    # 1-3. 工数実績csvの既存の実績最終行の終了時刻を現在時刻に更新して保存
-    current_time_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
-    worklog_df.at[worklog_df.index[-1], WORKLOG_COLUMNS[8]] = current_time_str
-    worklog_df.to_csv(worklog_csv_path, index=False, encoding="utf-8")
-
-    # 2. 入力されたタスク（新規の工数実績行）の追加処理
-    # 2-1. 入力されたタスクidのタスクcsvを読み込み
-    task_csv_path = _get_task_csv_path(task_id)
-    task = Task_def.read_task_csv(task_csv_path)
-
-    # 2-2. 入力されたcsvからオーダ番号、タスク名、サブタスクidに対応するサブタスク名、サブタスク実績時間を取得
-    order_number = task.order_number
-    task_name = task.name
-    subtask_row = task.sub_tasks[task.sub_tasks["subtask_id"] == subtask_id]
-    if subtask_row.empty:
-        raise ValueError(f"サブタスクID '{subtask_id}' がタスク '{task_id}' に見つかりません")
-    subtask_name = subtask_row.iloc[0]["name"]
-    subtask_actual_time = int(subtask_row.iloc[0]["actual_time"])
-
-    # 2-3. オーダ管理csvを読み込んで、オーダ番号に対応するオーダ略称とプロジェクト略称を取得
-    order_info = Task_def.OrderInformation()
-    order_abbr = order_info.get_order_abbr(order_number)
-    project_abbr = order_info.get_project_abbr(order_number)
-
-    # 2-4. 入力されたタスクの開始時刻と終了時刻を算出
-    # 2-4-1. 開始時刻は、現在時刻とする
+    # 4. 工数実績csvに新しい行を追加
+    # 終了時刻は既存の実績最終行の終了時刻（更新前の値）を引き継ぐ
     start_time = current_time
-    # 2-4-2. 終了時刻は、既存の実績最終行の終了時刻（更新前の値）とする
     end_time = last_end_time
-    # 2-4-3. 時刻を 'YYYY-MM-DD HH:MM:SS' 形式の文字列に変換
-    start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
-    end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
 
-    # 2-5. 工数実績csvの最終行に新しい行（入力されたタスクの内容）を追加して保存
-    worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")  # 更新後のcsvを再読み込み
-    new_row = pd.DataFrame([{
-        WORKLOG_COLUMNS[0]: order_number,
-        WORKLOG_COLUMNS[1]: order_abbr,
-        WORKLOG_COLUMNS[2]: project_abbr,
-        WORKLOG_COLUMNS[3]: task_id,
-        WORKLOG_COLUMNS[4]: subtask_id,
-        WORKLOG_COLUMNS[5]: task_name,
-        WORKLOG_COLUMNS[6]: subtask_name,
-        WORKLOG_COLUMNS[7]: start_time_str,
-        WORKLOG_COLUMNS[8]: end_time_str
-    }])
-    worklog_df = pd.concat([worklog_df, new_row], ignore_index=True)
-    worklog_df.to_csv(worklog_csv_path, index=False, encoding="utf-8")
+    _add_worklog_row(
+        willdo_date=willdo_date,
+        order_number=task_info["order_number"],
+        order_abbr=task_info["order_abbr"],
+        project_abbr=task_info["project_abbr"],
+        task_id=task_id,
+        subtask_id=subtask_id,
+        task_name=task_info["task_name"],
+        subtask_name=task_info["subtask_name"],
+        start_time=start_time,
+        end_time=end_time
+    )
 
-    # 2-6. 入力されたタスクのタスクcsvにサブタスク実績時間を更新して保存
-    # ※更新後の実績時間 = 既存の実績時間 + (終了時刻 - 開始時刻)
+    # 5. 入力されたタスクのタスクcsvにサブタスク実績時間を更新して保存
     duration_minutes = int((end_time - start_time).total_seconds() / 60)
-    new_actual_time = subtask_actual_time + duration_minutes
-
-    subtask_index = task.sub_tasks[task.sub_tasks["subtask_id"] == subtask_id].index[0]
-    task.sub_tasks.at[subtask_index, "actual_time"] = new_actual_time
-    task.save_to_csv()
+    _update_subtask_actual_time(
+        task_id=task_id,
+        subtask_id=subtask_id,
+        additional_minutes=duration_minutes
+    )
 
     return
 
@@ -278,7 +135,7 @@ def record_completed_meeting_WorkLog(
         willdo_date: str, achievement_minutes: int,
         meeting_name: str, order_number: str
         ) -> None:
-    """終了済み打合せの工数実績を記録する関数
+    """2.3.3項 終了済み打合せの工数実績を記録する関数
 
     Args:
         willdo_date (str): 呼び出し元のWillDoリストcsvの日付（YYMMDD形式）
@@ -286,98 +143,36 @@ def record_completed_meeting_WorkLog(
         meeting_name (str): 会議名（タスク名として記録）
         order_number (str): オーダ番号
     """
-
-    # 1. タスクidの作成
-    # 1-1. 現在時刻（=終了時刻）を取得
+    # 1. 開始時刻と終了時刻を算出
     end_time = datetime.now()
-    # 1-2. 開始時刻を計算 （現在時刻 - achievement_minutes）
     start_time = end_time - timedelta(minutes=int(achievement_minutes))
-    # 1-3. タスクidを 'MTG-HHMM' 形式で作成
+
+    # 2. タスクidを 'MTG-HHMM' 形式で作成
     task_id = f"MTG-{start_time.strftime('%H%M')}"
 
-    # 2. 工数実績csvの既存の最終行の終了時刻を取得
-    worklog_csv_path = _get_worklog_csv_path(willdo_date)
-    try:
-        last_end_time = check_WorkLog_latest_end_datetime(willdo_date)
-        worklog_exists = True
-    except ValueError:
-        # 工数実績csvが存在しないか、実績行がない場合
-        worklog_exists = False
-        last_end_time = None
-
     # 3. 工数実績csvの既存の実績最終行に対する処理
-    if worklog_exists and last_end_time is not None:
-        # 3a. 開始時刻が最終行の終了時刻以降の場合、既存の実績最終行はそのまま
-        if start_time >= last_end_time:
-            pass  # 何もしない
-        else:
-            # 3b. 開始時刻が最終行の終了時刻より前の場合
-            worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")
-            last_row = worklog_df.iloc[-1]
-            last_task_id = last_row[WORKLOG_COLUMNS[3]]
-            last_subtask_id = last_row[WORKLOG_COLUMNS[4]]
-            last_start_time_str = last_row[WORKLOG_COLUMNS[7]]
-            last_start_time = datetime.strptime(last_start_time_str, "%Y-%m-%d %H:%M:%S")
+    _update_last_worklog_row_if_overlap(willdo_date, start_time)
 
-            # 3b-1. 既存の実績最終行のタスクcsvを更新
-            # 3b-1-1. 既存の実績最終行のタスクid、サブタスクidに一致するサブタスクを取得
-            last_task_csv_path = _get_task_csv_path(last_task_id)
-            if os.path.exists(last_task_csv_path):
-                last_task = Task_def.read_task_csv(last_task_csv_path)
-                last_subtask_row = last_task.sub_tasks[last_task.sub_tasks["subtask_id"] == last_subtask_id]
-
-                if not last_subtask_row.empty:
-                    last_subtask_actual_time = int(last_subtask_row.iloc[0]["actual_time"])
-
-                    # 3b-1-2. サブタスク実績時間を更新
-                    # ※更新後の実績時間 = 既存の実績時間 - (既存の終了時刻 - 既存の開始時刻) + (会議開始時刻 - 既存の開始時刻)
-                    old_duration_minutes = int((last_end_time - last_start_time).total_seconds() / 60)
-                    new_duration_minutes = int((start_time - last_start_time).total_seconds() / 60)
-                    last_subtask_new_actual_time = last_subtask_actual_time - old_duration_minutes + new_duration_minutes
-
-                    last_subtask_index = last_task.sub_tasks[last_task.sub_tasks["subtask_id"] == last_subtask_id].index[0]
-                    last_task.sub_tasks.at[last_subtask_index, "actual_time"] = last_subtask_new_actual_time
-
-                    # 3b-1-3. タスクcsvを保存
-                    last_task.save_to_csv()
-
-            # 3b-2. 工数実績csvの既存の実績最終行の終了時刻を会議開始時刻に更新して保存
-            start_time_str_for_update = start_time.strftime("%Y-%m-%d %H:%M:%S")
-            worklog_df.at[worklog_df.index[-1], WORKLOG_COLUMNS[8]] = start_time_str_for_update
-            worklog_df.to_csv(worklog_csv_path, index=False, encoding="utf-8")
-
-    # 4. オーダ管理csvを読み込んで、オーダ番号に対応するオーダ略称とプロジェクト略称を取得
+    # 4. オーダ情報を取得
     order_info = Task_def.OrderInformation()
     order_abbr = order_info.get_order_abbr(order_number)
     project_abbr = order_info.get_project_abbr(order_number)
 
-    # 5. 時刻を 'YYYY-MM-DD HH:MM:SS' 形式の文字列に変換
-    start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
-    end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
+    # 5. 工数実績csvに新しい行を追加
+    _add_worklog_row(
+        willdo_date=willdo_date,
+        order_number=order_number,
+        order_abbr=order_abbr,
+        project_abbr=project_abbr,
+        task_id=task_id,
+        subtask_id="#000",
+        task_name=meeting_name,
+        subtask_name="",
+        start_time=start_time,
+        end_time=end_time
+    )
 
-    # 6. 工数実績csvに記録
-    # 6-1. willdo_dateに対応する工数実績csvが存在するか確認
-    # 6-2. 存在しない場合は新規作成
-    if not os.path.exists(worklog_csv_path):
-        _create_worklog_csv(worklog_csv_path)
-
-    # 6-3. 工数実績csvに新しい行を追加
-    worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")
-    new_row = pd.DataFrame([{
-        WORKLOG_COLUMNS[0]: order_number,
-        WORKLOG_COLUMNS[1]: order_abbr,
-        WORKLOG_COLUMNS[2]: project_abbr,
-        WORKLOG_COLUMNS[3]: task_id,
-        WORKLOG_COLUMNS[4]: "#000",  # サブタスクIDは "#000"
-        WORKLOG_COLUMNS[5]: meeting_name,
-        WORKLOG_COLUMNS[6]: "",  # サブタスク名は空文字列
-        WORKLOG_COLUMNS[7]: start_time_str,
-        WORKLOG_COLUMNS[8]: end_time_str
-    }])
-    worklog_df = pd.concat([worklog_df, new_row], ignore_index=True)
-
-    # 6-4. csvを保存
-    worklog_df.to_csv(worklog_csv_path, index=False, encoding="utf-8")
+    # ※打合せはタスクcsvが存在しないため、サブタスク実績時間の更新は不要
 
     return
 
@@ -386,7 +181,7 @@ def record_completed_task_WorkLog(
         willdo_date: str, achievement_minutes: int,
         task_id: str, subtask_id: str,
         ) -> None:
-    """終了済みタスクの工数実績を記録する関数
+    """2.3.3項 終了済みタスクの工数実績を記録する関数
 
     Args:
         willdo_date (str): 呼び出し元のWillDoリストcsvの日付（YYMMDD形式）
@@ -394,119 +189,38 @@ def record_completed_task_WorkLog(
         task_id (str): タスクID
         subtask_id (str): サブタスクID
     """
-
-    # 1. 欠番
-
-    # 終了時刻と開始時刻を計算
+    # 1. 開始時刻と終了時刻を算出
     end_time = datetime.now()
     start_time = end_time - timedelta(minutes=int(achievement_minutes))
 
-    # 2. 工数実績csvの既存の最終行の終了時刻を取得
-    worklog_csv_path = _get_worklog_csv_path(willdo_date)
-    try:
-        last_end_time = check_WorkLog_latest_end_datetime(willdo_date)
-        worklog_exists = True
-    except ValueError:
-        worklog_exists = False
-        last_end_time = None
+    # 2. 工数実績csvの既存の実績最終行に対する処理
+    _update_last_worklog_row_if_overlap(willdo_date, start_time)
 
-    # 3. 工数実績csvの既存の実績最終行に対する処理
-    if worklog_exists and last_end_time is not None:
-        # 3a. 開始時刻が最終行の終了時刻以降の場合、既存の実績最終行はそのまま
-        if start_time >= last_end_time:
-            pass  # 何もしない
-        else:
-            # 3b. 開始時刻が最終行の終了時刻より前の場合
-            worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")
-            last_row = worklog_df.iloc[-1]
-            last_task_id = last_row[WORKLOG_COLUMNS[3]]
-            last_subtask_id = last_row[WORKLOG_COLUMNS[4]]
-            last_start_time_str = last_row[WORKLOG_COLUMNS[7]]
-            last_start_time = datetime.strptime(last_start_time_str, "%Y-%m-%d %H:%M:%S")
+    # 3. 入力されたタスク情報を取得
+    task_info = _get_task_info_for_worklog(task_id, subtask_id)
 
-            # 3b-1. 既存の実績最終行のタスクcsvを更新
-            # 3b-1-1. 既存の実績最終行のタスクid、サブタスクidに一致するサブタスクを取得
-            last_task_csv_path = _get_task_csv_path(last_task_id)
-            if os.path.exists(last_task_csv_path):
-                last_task = Task_def.read_task_csv(last_task_csv_path)
-                last_subtask_row = last_task.sub_tasks[last_task.sub_tasks["subtask_id"] == last_subtask_id]
+    # 4. 工数実績csvに新しい行を追加
+    _add_worklog_row(
+        willdo_date=willdo_date,
+        order_number=task_info["order_number"],
+        order_abbr=task_info["order_abbr"],
+        project_abbr=task_info["project_abbr"],
+        task_id=task_id,
+        subtask_id=subtask_id,
+        task_name=task_info["task_name"],
+        subtask_name=task_info["subtask_name"],
+        start_time=start_time,
+        end_time=end_time
+    )
 
-                if not last_subtask_row.empty:
-                    last_subtask_actual_time = int(last_subtask_row.iloc[0]["actual_time"])
-
-                    # 3b-1-2. サブタスク実績時間を更新
-                    # ※更新後の実績時間 = 既存の実績時間 - (既存の終了時刻 - 既存の開始時刻) + (タスク開始時刻 - 既存の開始時刻)
-                    old_duration_minutes = int((last_end_time - last_start_time).total_seconds() / 60)
-                    new_duration_minutes = int((start_time - last_start_time).total_seconds() / 60)
-                    last_subtask_new_actual_time = last_subtask_actual_time - old_duration_minutes + new_duration_minutes
-
-                    last_subtask_index = last_task.sub_tasks[last_task.sub_tasks["subtask_id"] == last_subtask_id].index[0]
-                    last_task.sub_tasks.at[last_subtask_index, "actual_time"] = last_subtask_new_actual_time
-
-                    # 3b-1-3. タスクcsvを保存
-                    last_task.save_to_csv()
-
-            # 3b-2. 工数実績csvの既存の実績最終行の終了時刻をタスク開始時刻に更新して保存
-            start_time_str_for_update = start_time.strftime("%Y-%m-%d %H:%M:%S")
-            worklog_df.at[worklog_df.index[-1], WORKLOG_COLUMNS[8]] = start_time_str_for_update
-            worklog_df.to_csv(worklog_csv_path, index=False, encoding="utf-8")
-
-    # 4. 入力されたタスクidのタスクcsvを読み込み
-    task_csv_path = _get_task_csv_path(task_id)
-    task = Task_def.read_task_csv(task_csv_path)
-
-    # 入力されたcsvからオーダ番号、タスク名、サブタスクidに対応するサブタスク名、サブタスク実績時間を取得
-    order_number = task.order_number
-    task_name = task.name
-    subtask_row = task.sub_tasks[task.sub_tasks["subtask_id"] == subtask_id]
-    if subtask_row.empty:
-        raise ValueError(f"サブタスクID '{subtask_id}' がタスク '{task_id}' に見つかりません")
-    subtask_name = subtask_row.iloc[0]["name"]
-    subtask_actual_time = int(subtask_row.iloc[0]["actual_time"])
-
-    # 5. オーダ管理csvを読み込んで、オーダ番号に対応するオーダ略称とプロジェクト略称を取得
-    order_info = Task_def.OrderInformation()
-    order_abbr = order_info.get_order_abbr(order_number)
-    project_abbr = order_info.get_project_abbr(order_number)
-
-    # 6. 時刻を 'YYYY-MM-DD HH:MM:SS' 形式の文字列に変換
-    start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
-    end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
-
-    # 7. 工数実績csvに記録（新規の工数実績行）
-    # 7-1. 工数実績csvが存在しない場合は新規作成
-    if not os.path.exists(worklog_csv_path):
-        _create_worklog_csv(worklog_csv_path)
-
-    # 7-2. 工数実績csvに新しい行を追加
-    worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")
-    new_row = pd.DataFrame([{
-        WORKLOG_COLUMNS[0]: order_number,
-        WORKLOG_COLUMNS[1]: order_abbr,
-        WORKLOG_COLUMNS[2]: project_abbr,
-        WORKLOG_COLUMNS[3]: task_id,
-        WORKLOG_COLUMNS[4]: subtask_id,
-        WORKLOG_COLUMNS[5]: task_name,
-        WORKLOG_COLUMNS[6]: subtask_name,
-        WORKLOG_COLUMNS[7]: start_time_str,
-        WORKLOG_COLUMNS[8]: end_time_str
-    }])
-    worklog_df = pd.concat([worklog_df, new_row], ignore_index=True)
-
-    # 7-3. csvを保存
-    worklog_df.to_csv(worklog_csv_path, index=False, encoding="utf-8")
-
-    # 8. 入力されたタスクのタスクcsvにサブタスク実績時間を更新して保存
-    # ※更新後の実績時間 = 既存の実績時間 + achievement_minutes
-    new_actual_time = subtask_actual_time + int(achievement_minutes)
-
-    subtask_index = task.sub_tasks[task.sub_tasks["subtask_id"] == subtask_id].index[0]
-    task.sub_tasks.at[subtask_index, "actual_time"] = new_actual_time
-    task.save_to_csv()
+    # 5. 入力されたタスクのタスクcsvにサブタスク実績時間を更新して保存
+    _update_subtask_actual_time(
+        task_id=task_id,
+        subtask_id=subtask_id,
+        additional_minutes=int(achievement_minutes)
+    )
 
     return
-
-
 
 def check_WorkLog_latest_end_datetime(willdo_date: str) -> datetime:
     """工数実績csvの最終行の終了時刻をdatetime型で取得する
@@ -541,6 +255,185 @@ def check_WorkLog_latest_end_datetime(willdo_date: str) -> datetime:
 # -------------------------------------------------------------
 # 上記の関数で使用する補助関数群
 # -------------------------------------------------------------
+
+
+def _get_task_info_for_worklog(task_id: str, subtask_id: str) -> dict:
+    """タスクID・サブタスクIDから工数実績記録に必要な情報を取得する。
+
+    Args:
+        task_id (str): タスクID
+        subtask_id (str): サブタスクID
+
+    Returns:
+        dict: 以下のキーを持つ辞書
+            - order_number: オーダ番号
+            - order_abbr: オーダ略称
+            - project_abbr: プロジェクト略称
+            - task_name: タスク名
+            - subtask_name: サブタスク名
+
+    Raises:
+        ValueError: サブタスクIDがタスクに存在しない場合
+    """
+    # タスクcsvを読み込み
+    task_csv_path = _get_task_csv_path(task_id)
+    task = Task_def.read_task_csv(task_csv_path)
+
+    # タスク情報を取得
+    order_number = task.order_number
+    task_name = task.name
+
+    # サブタスク情報を取得
+    subtask_row = task.sub_tasks[task.sub_tasks["subtask_id"] == subtask_id]
+    if subtask_row.empty:
+        raise ValueError(f"サブタスクID '{subtask_id}' がタスク '{task_id}' に見つかりません")
+    subtask_name = subtask_row.iloc[0]["name"]
+
+    # オーダ情報を取得
+    order_info = Task_def.OrderInformation()
+    order_abbr = order_info.get_order_abbr(order_number)
+    project_abbr = order_info.get_project_abbr(order_number)
+
+    return {
+        "order_number": order_number,
+        "order_abbr": order_abbr,
+        "project_abbr": project_abbr,
+        "task_name": task_name,
+        "subtask_name": subtask_name
+    }
+
+
+def _update_last_worklog_row_if_overlap(
+        willdo_date: str, new_start_time: datetime) -> None:
+    """新タスクの開始時刻が既存最終行の終了時刻より前の場合、工数実績csv既存最終行とその行に対応するタスクcsvを更新する。
+
+    新タスクの開始時刻が既存最終行の終了時刻以降の場合は何もしない。
+    工数実績csvが存在しない、または空の場合も何もしない。
+
+    Args:
+        willdo_date (str): WillDo日付（YYMMDD形式）
+        new_start_time (datetime): 新タスクの開始時刻
+    """
+    worklog_csv_path = _get_worklog_csv_path(willdo_date)
+
+    # 工数実績csvが存在しない、または空の場合は何もしない
+    try:
+        last_end_time = check_WorkLog_latest_end_datetime(willdo_date)
+    except ValueError:
+        return
+
+    # 開始時刻が最終行の終了時刻以降の場合は何もしない
+    if new_start_time >= last_end_time:
+        return
+
+    # 開始時刻が最終行の終了時刻より前の場合、既存最終行を更新
+    worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")
+    last_row = worklog_df.iloc[-1]
+    last_task_id = last_row[WORKLOG_COLUMNS[3]]
+    last_subtask_id = last_row[WORKLOG_COLUMNS[4]]
+    last_start_time_str = last_row[WORKLOG_COLUMNS[7]]
+    last_start_time = datetime.strptime(last_start_time_str, "%Y-%m-%d %H:%M:%S")
+
+    # 既存の実績最終行のタスクcsvを更新
+    last_task_csv_path = _get_task_csv_path(last_task_id)
+    if os.path.exists(last_task_csv_path):
+        last_task = Task_def.read_task_csv(last_task_csv_path)
+        last_subtask_row = last_task.sub_tasks[last_task.sub_tasks["subtask_id"] == last_subtask_id]
+
+        if not last_subtask_row.empty:
+            last_subtask_actual_time = int(last_subtask_row.iloc[0]["actual_time"])
+
+            # サブタスク実績時間を更新
+            # ※更新後の実績時間 = 既存の実績時間 - (既存の終了時刻 - 既存の開始時刻) + (新タスク開始時刻 - 既存の開始時刻)
+            old_duration_minutes = int((last_end_time - last_start_time).total_seconds() / 60)
+            new_duration_minutes = int((new_start_time - last_start_time).total_seconds() / 60)
+            last_subtask_new_actual_time = last_subtask_actual_time - old_duration_minutes + new_duration_minutes
+
+            last_subtask_index = last_task.sub_tasks[last_task.sub_tasks["subtask_id"] == last_subtask_id].index[0]
+            last_task.sub_tasks.at[last_subtask_index, "actual_time"] = last_subtask_new_actual_time
+            last_task.save_to_csv()
+
+    # 工数実績csvの既存の実績最終行の終了時刻を新タスク開始時刻に更新して保存
+    new_start_time_str = new_start_time.strftime("%Y-%m-%d %H:%M:%S")
+    worklog_df.at[worklog_df.index[-1], WORKLOG_COLUMNS[8]] = new_start_time_str
+    worklog_df.to_csv(worklog_csv_path, index=False, encoding="utf-8")
+
+
+def _add_worklog_row(
+        willdo_date: str,
+        order_number: str, order_abbr: str, project_abbr: str,
+        task_id: str, subtask_id: str,
+        task_name: str, subtask_name: str,
+        start_time: datetime, end_time: datetime) -> None:
+    """工数実績csvに新しい行を追加する。
+
+    工数実績csvが存在しない場合は新規作成する。
+
+    Args:
+        willdo_date (str): WillDo日付（YYMMDD形式）
+        order_number (str): オーダ番号
+        order_abbr (str): オーダ略称
+        project_abbr (str): プロジェクト略称
+        task_id (str): タスクID
+        subtask_id (str): サブタスクID
+        task_name (str): タスク名
+        subtask_name (str): サブタスク名
+        start_time (datetime): 開始時刻
+        end_time (datetime): 終了時刻
+    """
+    worklog_csv_path = _get_worklog_csv_path(willdo_date)
+
+    # 存在しない場合は新規作成
+    if not os.path.exists(worklog_csv_path):
+        _create_worklog_csv(worklog_csv_path)
+
+    # 時刻を 'YYYY-MM-DD HH:MM:SS' 形式の文字列に変換
+    start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
+    end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
+
+    # 工数実績csvに新しい行を追加
+    worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")
+    new_row = pd.DataFrame([{
+        WORKLOG_COLUMNS[0]: order_number,
+        WORKLOG_COLUMNS[1]: order_abbr,
+        WORKLOG_COLUMNS[2]: project_abbr,
+        WORKLOG_COLUMNS[3]: task_id,
+        WORKLOG_COLUMNS[4]: subtask_id,
+        WORKLOG_COLUMNS[5]: task_name,
+        WORKLOG_COLUMNS[6]: subtask_name,
+        WORKLOG_COLUMNS[7]: start_time_str,
+        WORKLOG_COLUMNS[8]: end_time_str
+    }])
+    worklog_df = pd.concat([worklog_df, new_row], ignore_index=True)
+    worklog_df.to_csv(worklog_csv_path, index=False, encoding="utf-8")
+
+
+def _update_subtask_actual_time(
+        task_id: str, subtask_id: str, additional_minutes: int) -> None:
+    """タスクcsvのサブタスク実績時間を更新して保存する。
+
+    Args:
+        task_id (str): タスクID
+        subtask_id (str): サブタスクID
+        additional_minutes (int): 加算する実績時間（分）
+
+    Raises:
+        ValueError: サブタスクIDがタスクに存在しない場合
+    """
+    task_csv_path = _get_task_csv_path(task_id)
+    task = Task_def.read_task_csv(task_csv_path)
+
+    subtask_row = task.sub_tasks[task.sub_tasks["subtask_id"] == subtask_id]
+    if subtask_row.empty:
+        raise ValueError(f"サブタスクID '{subtask_id}' がタスク '{task_id}' に見つかりません")
+
+    subtask_actual_time = int(subtask_row.iloc[0]["actual_time"])
+    new_actual_time = subtask_actual_time + additional_minutes
+
+    subtask_index = task.sub_tasks[task.sub_tasks["subtask_id"] == subtask_id].index[0]
+    task.sub_tasks.at[subtask_index, "actual_time"] = new_actual_time
+    task.save_to_csv()
+
 
 def _get_task_csv_path(task_id: str) -> str:
     """タスクIDからタスクCSVファイルのパスを構築する。
