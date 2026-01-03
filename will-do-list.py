@@ -14,37 +14,6 @@ import services.C_WorkLog_record as Output_C
 from sidebar import task_view
 
 
-def get_latest_WillDO_date() -> datetime.date:
-    """Will-doリストの本日を除く最新日付を取得する。
-
-    Returns:
-        datetime.date: 本日を除く最新日付。存在しない場合はNone。
-    """
-    willdo_dir = os.path.join("data", "WillDo")
-    if not os.path.exists(willdo_dir):
-        return ""
-
-    willdo_files = [
-        f for f in os.listdir(willdo_dir)
-        if f.startswith("WillDo") and f.endswith(".csv")
-    ]
-    dates = []
-    for filename in willdo_files:
-        date_str = filename[len("WillDo"):len("WillDo") + 6]
-        try:
-            date_obj = datetime.strptime(date_str, "%y%m%d").date()
-            if date_obj < datetime.now().date():
-                dates.append(date_obj)
-        except ValueError:
-            continue
-
-    if not dates:
-        return ""
-
-    latest_date = max(dates)
-    return latest_date
-
-
 def WillDo_display_settings(
         df: pd.DataFrame, use_filter: bool) -> st_aggrid.AgGrid:
     """Willdoリスト表示の共通設定
@@ -139,7 +108,7 @@ if __name__ == "__main__":
         with col_right:
             selected_date = st.date_input(
                 "日付を選択してください",
-                value=get_latest_WillDO_date(),
+                value=Output_B.get_without_today_latest_WillDO_date(),
                 key="willdo_date_input",
                 label_visibility="collapsed"
             )
