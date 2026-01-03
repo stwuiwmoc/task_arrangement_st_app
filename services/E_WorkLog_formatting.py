@@ -9,27 +9,25 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models.Task_definition as Task_def
 
 
-def sum_df_each_subtask(worklog_date: datetime.date) -> pd.DataFrame:
-    # 1. CSVファイルのパスを作成
-    csv_filename = f"./data/WorkLogs/工数実績{worklog_date.strftime('%y%m%d')}.csv"
+def sum_df_each_subtask(csv_filepath: str) -> pd.DataFrame:
 
-    # 2. CSVファイルの全ての行・列をdataframeとして読み込む
+    # 1. CSVファイルの全ての行・列をdataframeとして読み込む
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
-    df = pd.read_csv(csv_filename, parse_dates=['開始時刻', '終了時刻'])
-    # 3. 終了時刻列と開始時刻列の差分を計算し、時間列（分）を追加する
+    df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
+    # 2. 終了時刻列と開始時刻列の差分を計算し、時間列（分）を追加する
     df['実時間'] = (df['終了時刻'] - df['開始時刻']).dt.total_seconds() / 60
-    # 4. 終了時刻列と開始時刻列を削除
+    # 3. 終了時刻列と開始時刻列を削除
     df = df.drop(columns=['開始時刻', '終了時刻'])
 
-    # 5. 列結合と削除
-    # 5-1. タスクID列・サブタスクID列を結合し、新しい列「ID」列を作成する
+    # 4. 列結合と削除
+    # 4-1. タスクID列・サブタスクID列を結合し、新しい列「ID」列を作成する
     # ※ 結合ルール : タスクID + サブタスクID
     df['ID'] = df['タスクID'].astype(str) + df['サブタスクID'].astype(str)
 
-    # 5-2. タスク名列・サブタスク名列を結合し、新しい列「名前」列を作成する
+    # 4-2. タスク名列・サブタスク名列を結合し、新しい列「名前」列を作成する
     # ※ 結合ルール : タスク名 + " / " + サブタスク名
     df['名前'] = df['タスク名'].astype(str) + " / " + df['サブタスク名'].astype(str)
-    # 5-3. タスクID列・サブタスクID列・タスク名列・サブタスク名列を削除する
+    # 4-3. タスクID列・サブタスクID列・タスク名列・サブタスク名列を削除する
     df = df.drop(columns=['タスクID', 'サブタスクID', 'タスク名', 'サブタスク名'])
 
     # 5. ID列が同じ行をグループ化し、時間列を合計する

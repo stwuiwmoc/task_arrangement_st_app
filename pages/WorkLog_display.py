@@ -23,11 +23,11 @@ if __name__ == "__main__":
             label_visibility="collapsed"
         )
     selected_str = selected_date.strftime("%y%m%d")
-    WorkLog_filename = os.path.join("data", "WorkLogs", f"工数実績{selected_str}.csv")
+    WorkLog_filepath = os.path.join("data", "WorkLogs", f"工数実績{selected_str}.csv")
 
-    if os.path.exists(WorkLog_filename):
+    if os.path.exists(WorkLog_filepath):
         # データ処理
-        df_sum_subtask = Output_E.sum_df_each_subtask(selected_date)
+        df_sum_subtask = Output_E.sum_df_each_subtask(WorkLog_filepath)
         df_sum_order = Output_E.sum_df_each_order(df_sum_subtask)
         df_display = Output_E.convert_df_for_display(df_sum_order)
 
