@@ -1,0 +1,110 @@
+# %%
+import os
+import sys
+from datetime import datetime, timedelta
+
+import pandas as pd
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import models.Task_definition as Task_def
+
+
+def sum_df_each_subtask(worklog_date: datetime.date) -> pd.DataFrame:
+    # 1. CSVファイルのパスを作成
+    csv_filename = f"./data/WorkLogs/工数実績{worklog_date.strftime('%y%m%d')}.csv"
+
+    # 2. CSVファイルの全ての行・列をdataframeとして読み込む
+    # ※開始時刻列、終了時刻列はdatetime型として読み込む
+    df = pd.read_csv(csv_filename, parse_dates=['開始時刻', '終了時刻'])
+    # 3. 終了時刻列と開始時刻列の差分を計算し、時間列（分）を追加する
+    df['実時間'] = (df['終了時刻'] - df['開始時刻']).dt.total_seconds() / 60
+    # 4. 終了時刻列と開始時刻列を削除
+    df = df.drop(columns=['開始時刻', '終了時刻'])
+
+    # 5. 列結合と削除
+    # 5-1. タスクID列・サブタスクID列を結合し、新しい列「ID」列を作成する
+    # ※ 結合ルール : タスクID + サブタスクID
+    df['ID'] = df['タスクID'].astype(str) + df['サブタスクID'].astype(str)
+
+    # 5-2. タスク名列・サブタスク名列を結合し、新しい列「名前」列を作成する
+    # ※ 結合ルール : タスク名 + " / " + サブタスク名
+    df['名前'] = df['タスク名'].astype(str) + " / " + df['サブタスク名'].astype(str)
+    # 5-3. タスクID列・サブタスクID列・タスク名列・サブタスク名列を削除する
+    df = df.drop(columns=['タスクID', 'サブタスクID', 'タスク名', 'サブタスク名'])
+
+    # 5. ID列が同じ行をグループ化し、時間列を合計する
+    # ※ 時間列のみ集計し、他の列は最初の行の値を使用する
+    df_sum = df.groupby('ID', as_index=False).agg({
+        '名前': 'first',
+        '実時間': 'sum',
+        'オーダ番号': 'first',
+        'オーダ略称': 'first',
+        'プロジェクト略称': 'first',
+    })
+    # 6. 「プロジェクト略称」列の列名を「PJ略」に変更する
+    df_sum = df_sum.rename(columns={'プロジェクト略称': 'PJ略'})
+
+    return df_sum
+
+def sum_df_each_order(
+        df_sum_subtask: pd.DataFrame) -> pd.DataFrame:
+
+    # 1. 時間列で降順ソート
+    df = df_sum_subtask.copy()
+    df = df.sort_values(by='実時間', ascending=False)
+
+    # 2. df全体をオーダ番号列でソート
+    # ※ソート順は、OrderInformation().df["order_number"]の順番に従う
+    order_info = Task_def.OrderInformation()
+    order_number_index = {num: i for i, num in enumerate(order_info.df["order_number"]) }
+    df_sum_subtask_sorted = df.sort_values(
+        by=['実時間'],
+        ascending=[False],
+    )
+
+    # 3. オーダ番号列が同じ行をグループ化し、時間列を合計する
+    # ※ 時間列は集計、名前列は結合、他の列は最初の行の値を使用する
+    df_sum_order = df_sum_subtask_sorted.groupby('オーダ番号', as_index=False).agg({
+        '実時間': 'sum',
+        '名前': lambda x: '  \n'.join(x),
+    })
+
+    # 4. 時間列をint型に変換
+    df_sum_order['実時間'] = df_sum_order['実時間'].astype(int)
+
+    # 5. 時間列を15分単位で切り捨てた「工数」列を作成
+    df_truncated = df_sum_order.copy()
+    df_truncated['工数'] = (df_truncated['実時間'] // 15) * 15
+
+    # 6. オーダ番号列で再度ソート
+    # ※ソート順は、OrderInformation().df["order_number"]の順番に従う
+    df_truncated_sorted = df_truncated.sort_values(
+        by=['オーダ番号'],
+        ascending=[True],
+        key=lambda col: col.map(order_number_index) if col.name == 'オーダ番号' else col
+    )
+    return df_truncated_sorted
+
+
+def convert_df_for_display(
+        df: pd.DataFrame) -> pd.DataFrame:
+
+    # 1. 時間列と工数列を、分数から時間表記に変換
+    # ※ 例: 67 -> "1h07m"
+    df_display = df.copy()
+    df_display['実時間'] = df_display['実時間'].apply(_format_minutes_to_hours_minutes)
+    df_display['工数'] = df_display['工数'].apply(_format_minutes_to_hours_minutes)
+
+    # 2. 列の並び順を変更
+    df_display = df_display[['オーダ番号', '工数', '実時間', '名前']]
+
+    return df_display
+
+def _format_minutes_to_hours_minutes(minutes: int) -> str:
+    hours = minutes // 60
+    mins = minutes % 60
+    return f"{hours}h{mins:02d}m"
+
+
+if __name__ == "__main__":
+    pass
