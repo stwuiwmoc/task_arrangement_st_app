@@ -98,6 +98,51 @@ def convert_df_for_display(
 
     return df_display
 
+
+def calc_WorkLog_summary(csv_filepath: str, df_truncated: pd.DataFrame, add_daytime_break: bool) -> pd.DataFrame:
+    # 1. CSVファイルの全ての行・列をdataframeとして読み込む
+    # ※開始時刻列、終了時刻列はdatetime型として読み込む
+    df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
+
+    # 2. 開始時刻で最も早い行のdatetimeと、終了時刻で最も遅い行のdatetimeを取得
+    earliest_start = df['開始時刻'].min()
+    latest_end = df['終了時刻'].max()
+
+    # 3. 滞在時間を計算
+    total_stay_minutes = int((latest_end - earliest_start).total_seconds() / 60)
+
+    # 4. dfから実時間合計と工数合計を取得して実働時間の15分切り捨てを計算
+    total_real_minutes = df_truncated['実時間'].sum()
+    total_work_minutes = df_truncated['工数'].sum()
+    total_real_minutes_truncated = (total_real_minutes // 15) * 15
+    others_minutes = total_real_minutes_truncated - total_work_minutes
+
+
+    # 5. 昼休憩を除く休憩時間を計算
+    if add_daytime_break:
+        daytime_break_minutes = 60
+    else:
+        daytime_break_minutes = 0
+    total_break_minutes = total_stay_minutes - total_real_minutes - daytime_break_minutes
+
+    # 6. 表示用のdfを作成
+    # 6-1. 各種時間をフォーマット変換して辞書に格納
+    output_dict = {
+        "ESS始業": earliest_start.strftime("%H:%M"),
+        "ESS終業": latest_end.strftime("%H:%M"),
+        "ESS滞在": _format_minutes_to_hours_minutes(total_stay_minutes),
+        "ESS休憩": _format_minutes_to_hours_minutes(total_break_minutes),
+        "ESS実働": _format_minutes_to_hours_minutes(total_real_minutes),
+        "BJP合計": _format_minutes_to_hours_minutes(total_real_minutes_truncated),
+        "BJPその他": _format_minutes_to_hours_minutes(others_minutes),
+    }
+
+    # 6-2. 辞書のkeysを列名、valuesをデータとしてDataFrameを作成
+    df_output = pd.DataFrame([output_dict])
+
+    return df_output
+
+
 def _format_minutes_to_hours_minutes(minutes: int) -> str:
     hours = minutes // 60
     mins = minutes % 60

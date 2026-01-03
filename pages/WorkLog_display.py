@@ -12,9 +12,13 @@ if __name__ == "__main__":
     st.set_page_config(layout="wide")
     task_view.task_sidebar()
 
-    col_left, col_right = st.columns([1, 1])
+    col_left, col_center, col_right = st.columns([2, 1, 1])
     with col_left:
-        st.markdown("#### BJP入力用出力")
+        st.markdown("#### ESS/BJP入力用処理")
+
+    with col_center:
+        add_daytime_break = st.checkbox("昼休憩を考慮", value=True)
+
     with col_right:
         selected_date = st.date_input(
             "日付を選択してください",
@@ -22,6 +26,7 @@ if __name__ == "__main__":
             key="willdo_date_input",
             label_visibility="collapsed"
         )
+
     selected_str = selected_date.strftime("%y%m%d")
     WorkLog_filepath = os.path.join("data", "WorkLogs", f"工数実績{selected_str}.csv")
 
@@ -30,12 +35,14 @@ if __name__ == "__main__":
         df_sum_subtask = Output_E.sum_df_each_subtask(WorkLog_filepath)
         df_sum_order = Output_E.sum_df_each_order(df_sum_subtask)
         df_display = Output_E.convert_df_for_display(df_sum_order)
+        summary_df = Output_E.calc_WorkLog_summary(WorkLog_filepath, df_sum_order, add_daytime_break)
 
         # 表示
+        st.data_editor(summary_df, use_container_width=True, hide_index=True)
         st.table(df_display)
 
         st.markdown("#### サブタスク別集計")
         st.data_editor(
             df_sum_subtask, use_container_width=True)
     else:
-        st.info("工数実績csv未作成です")
+        st.info("will-doリスト未作成です（＝工数実績csvも未作成）")
