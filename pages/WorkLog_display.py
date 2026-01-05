@@ -1,6 +1,7 @@
 import os
 import sys
 
+import pandas as pd
 import streamlit as st
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -44,5 +45,10 @@ if __name__ == "__main__":
         st.markdown("#### サブタスク別集計")
         st.data_editor(
             df_sum_subtask, use_container_width=True)
+
+        st.markdown("#### 工数実績csv生データ")
+        st.data_editor(
+            pd.read_csv(WorkLog_filepath, parse_dates=['開始時刻', '終了時刻']),
+            use_container_width=True)
     else:
         st.info("will-doリスト未作成です（＝工数実績csvも未作成）")
