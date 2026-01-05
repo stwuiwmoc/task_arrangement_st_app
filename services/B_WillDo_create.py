@@ -30,8 +30,8 @@ def create_new_WillDo_with_DailyTasks():
     WillDo_df = pd.DataFrame(
         columns=[col.metadata["label"] for col in Task_def.WillDoEntry.__dataclass_fields__.values()])
 
-    # 最新のWillDoファイルを特定
-    target_date = get_latest_WillDo_date()
+    # 作業開始時点で最新のWillDoファイルを特定
+    target_date = get_latest_WillDo_datetime()
 
     # マッチするデイリータスクCSVを読み込み
     dates_since_target = get_dates_since_date(target_date)
@@ -181,7 +181,40 @@ def add_WillDo_meeting(
 # -------------------------------------------------------------
 # 上記の関数で使用する補助関数群
 # ------------------------------------------------------------
-def get_latest_WillDo_date() -> datetime:
+
+
+def get_without_today_latest_WillDO_date() -> datetime.date:
+    """Will-doリストの本日を除く最新日付を取得する。
+
+    Returns:
+        datetime.date: 本日を除く最新日付。存在しない場合はNone。
+    """
+    willdo_dir = os.path.join("data", "WillDo")
+    if not os.path.exists(willdo_dir):
+        return ""
+
+    willdo_files = [
+        f for f in os.listdir(willdo_dir)
+        if f.startswith("WillDo") and f.endswith(".csv")
+    ]
+    dates = []
+    for filename in willdo_files:
+        date_str = filename[len("WillDo"):len("WillDo") + 6]
+        try:
+            date_obj = datetime.strptime(date_str, "%y%m%d").date()
+            if date_obj < datetime.now().date():
+                dates.append(date_obj)
+        except ValueError:
+            continue
+
+    if not dates:
+        return ""
+
+    latest_date = max(dates)
+    return latest_date
+
+
+def get_latest_WillDo_datetime() -> datetime:
     """
     最新のWillDoリストの日付を取得する。
 
