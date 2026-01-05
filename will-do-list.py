@@ -288,15 +288,13 @@ if __name__ == "__main__":
                     meeting_minutes = st.number_input(
                         "分数入力", step=1, key="willdo_meeting_minute_input", placeholder="分", label_visibility="collapsed", value=None
                     )
-                    if meeting_minutes is None:
-                        meeting_minutes = 0
                 with col_add2_btn:
                     meeting_record_btn = st.button(
                         f"{meeting_minutes}分記録",
                         key="willdo_add_meeting_minute_btn", use_container_width=True
                     )
                     if meeting_record_btn:
-                        if meeting_name_input and (meeting_minutes > 0):
+                        if meeting_name_input and (meeting_minutes >= 0):
                             Output_C.record_completed_meeting_WorkLog(
                                 willdo_date=selected_str,
                                 achievement_minutes=int(meeting_minutes),
