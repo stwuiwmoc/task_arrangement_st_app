@@ -67,7 +67,8 @@ def start_new_timer_and_record_WorkLog(
     )
 
     # 6. タイマー設定関数を呼び出し
-    Output_D.send_timer_boot_email(timer_minutes)
+    # ※実環境だとブロックされて送信できなかったためコメントアウト
+    # Output_D.send_timer_boot_email(timer_minutes)
 
     return
 

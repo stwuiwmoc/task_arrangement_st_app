@@ -1,3 +1,4 @@
+import datetime
 import os
 import sys
 
@@ -5,7 +6,6 @@ import pandas as pd
 import streamlit as st
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import services.B_WillDo_create as Output_B
 import services.E_WorkLog_formatting as Output_E
 from sidebar import task_view
 
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     with col_right:
         selected_date = st.date_input(
             "日付を選択してください",
-            value=Output_B.get_without_today_latest_WillDO_date(),
+            value=datetime.date.today(),
             key="willdo_date_input",
             label_visibility="collapsed"
         )
@@ -51,4 +51,4 @@ if __name__ == "__main__":
             pd.read_csv(WorkLog_filepath, parse_dates=['開始時刻', '終了時刻']),
             use_container_width=True)
     else:
-        st.info("will-doリスト未作成です（＝工数実績csvも未作成）")
+        st.info("工数実績csv未作成です")
