@@ -272,7 +272,7 @@ if __name__ == "__main__":
                         key="willdo_add_meeting_minute_btn", use_container_width=True
                     )
                     if meeting_record_btn:
-                        if meeting_name_input and (meeting_minutes >= 0) and (wraptime_minutes >= 0):
+                        if meeting_name_input and meeting_minutes and wraptime_minutes:
                             Output_C.record_completed_meeting_WorkLog(
                                 willdo_date=selected_str,
                                 achievement_minutes=int(meeting_minutes),
