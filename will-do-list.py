@@ -295,10 +295,14 @@ if __name__ == "__main__":
                         "オーダを選択", order_labels, key="willdo_order_selectbox", label_visibility="collapsed")
                     order_input = order_number_map[selected_label]
 
-                col_add2_minute, col_add2_btn = st.columns([1, 2])
-                with col_add2_minute:
+                col_add2_achievement_minute, col_add2_wraptime_minute, col_add2_btn = st.columns([2, 2, 3])
+                with col_add2_achievement_minute:
                     meeting_minutes = st.number_input(
-                        "分数入力", step=1, key="willdo_meeting_minute_input", placeholder="分", label_visibility="collapsed", value=None
+                        "分数入力", step=1, key="willdo_meeting_minute_input", placeholder="実績", label_visibility="collapsed", value=None
+                    )
+                with col_add2_wraptime_minute:
+                    wraptime_minutes = st.number_input(
+                        "経過時間", step=1, key="willdo_meeting_wraptime_input", placeholder="終了後", label_visibility="collapsed", value=None
                     )
                 with col_add2_btn:
                     meeting_record_btn = st.button(
@@ -306,10 +310,11 @@ if __name__ == "__main__":
                         key="willdo_add_meeting_minute_btn", use_container_width=True
                     )
                     if meeting_record_btn:
-                        if meeting_name_input and (meeting_minutes >= 0):
+                        if meeting_name_input and (meeting_minutes >= 0) and (wraptime_minutes >= 0):
                             Output_C.record_completed_meeting_WorkLog(
                                 willdo_date=selected_str,
                                 achievement_minutes=int(meeting_minutes),
+                                wraptime_minutes=int(wraptime_minutes),
                                 meeting_name=meeting_name_input,
                                 order_number=order_input,
                                 is_meeting_planned=is_meeting_planned

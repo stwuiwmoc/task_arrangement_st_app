@@ -133,7 +133,7 @@ def continuously_start_and_record_WorkLog(
 
 
 def record_completed_meeting_WorkLog(
-        willdo_date: str, achievement_minutes: int,
+        willdo_date: str, achievement_minutes: int, wraptime_minutes: int,
         meeting_name: str, order_number: str,
         is_meeting_planned: bool
         ) -> None:
@@ -142,12 +142,13 @@ def record_completed_meeting_WorkLog(
     Args:
         willdo_date (str): 呼び出し元のWillDoリストcsvの日付（YYMMDD形式）
         achievement_minutes (int): 会議の実績時間（分）
+        wraptime_minutes (int): 記録対象の会議の後の経過時間（分）
         meeting_name (str): 会議名（タスク名として記録）
         order_number (str): オーダ番号
         is_meeting_planned (bool): 会議が予定されていたものか突発的に発生したものか
     """
     # 1. 開始時刻と終了時刻を算出
-    end_time = datetime.now()
+    end_time = datetime.now() - timedelta(minutes=int(wraptime_minutes))
     start_time = end_time - timedelta(minutes=int(achievement_minutes))
 
     # 2. タスクidを 'MTG-HHMM' / 'DSC-HHMM'形式で作成
