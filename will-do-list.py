@@ -151,7 +151,7 @@ if __name__ == "__main__":
                 st.write(f"**選択中：{now_row['タスクID']} {now_row['サブID']}「{now_row['タスク名']}」の「{now_row['サブ名']}」**")
                 radio_minutes = [15, 8, now_row["見込み"], math.ceil(now_row["残時間/日"])]
 
-                col_timer1, col_timer2, col_record = st.columns([9, 3, 5], border=True)
+                col_timer1, col_timer2, col_record_task = st.columns([9, 3, 5], border=True)
 
                 with col_timer1:
                     # タイマー開始ボタン
@@ -195,16 +195,16 @@ if __name__ == "__main__":
                         else:
                             st.warning("直前のサブタスク終了時刻を過ぎているため、続けて開始できません。新規にタイマーを開始してください。")
 
-                with col_record:
+                with col_record_task:
                     # 実績記録ボタン
-                    col_record_minute, col_record_btn = st.columns([2, 2])
-                    with col_record_minute:
+                    col_record_task_minute, col_record_task_btn = st.columns([2, 2])
+                    with col_record_task_minute:
                         custom_minutes = st.number_input(
                             "分数入力", step=1, key="minute_input", placeholder="分", label_visibility="collapsed", value=None
                         )
                         if custom_minutes is None:
                             custom_minutes = 0
-                    with col_record_btn:
+                    with col_record_task_btn:
                         record_button = st.button(
                             f"{custom_minutes}分記録",
                             key="willdo_timer3_btn", use_container_width=True)
@@ -221,9 +221,71 @@ if __name__ == "__main__":
                 st.warning("「今」が複数行選択されています")
 
             # タスクID・サブタスクID指定と会議名・オーダ指定で実績記録操作を2カラムで表示
-            col_add1, col_blank, col_add2 = st.columns([9, 3, 5])
+            col_record_meeting, col_add_task = st.columns([9, 8])
 
-            with col_add1:
+            with col_record_meeting:
+                st.markdown("#### 打合せ実績を記録", unsafe_allow_html=True)
+                # OrderInformationクラスからオーダ番号一覧と略称取得
+                order_info = Task_def.OrderInformation()
+                order_numbers = order_info.df["order_number"].dropna().unique().tolist()
+                order_labels = []
+                order_number_map = {}
+                for order_number in order_numbers:
+                    pj_abbr = order_info.get_project_abbr(order_number)
+                    order_abbr = order_info.get_order_abbr(order_number)
+                    label = f"{pj_abbr} / {order_abbr}"
+                    order_labels.append(label)
+                    order_number_map[label] = order_number
+
+                meeting_name_input = st.text_input(
+                    "会議名", key="willdo_meetingname", placeholder="会議名", label_visibility="collapsed")
+                col_record_meeting_order, col_record_meeting_radio = st.columns([5, 4])
+                with col_record_meeting_radio:
+                    meeting_type = st.radio(
+                        "打合せ種別",
+                        ["突発", "予定"],
+                        horizontal=True,
+                        key="willdo_meeting_type_radio",
+                        label_visibility="collapsed"
+                    )
+                    if meeting_type == "突発":
+                        is_meeting_planned = False
+                    else:
+                        is_meeting_planned = True
+                with col_record_meeting_order:
+                    selected_label = st.selectbox(
+                        "オーダを選択", order_labels, key="willdo_order_selectbox", label_visibility="collapsed")
+                    order_input = order_number_map[selected_label]
+
+                col_record_achievement_minute, col_record_wraptime_minute, col_record_meeting_btn = st.columns([2.5, 2.5, 4])
+                with col_record_achievement_minute:
+                    meeting_minutes = st.number_input(
+                        "分数入力", step=1, key="willdo_meeting_minute_input", placeholder="実績", label_visibility="collapsed", value=None
+                    )
+                with col_record_wraptime_minute:
+                    wraptime_minutes = st.number_input(
+                        "経過時間", step=1, key="willdo_meeting_wraptime_input", placeholder="終了後経過", label_visibility="collapsed", value=None
+                    )
+                with col_record_meeting_btn:
+                    meeting_record_btn = st.button(
+                        f"{meeting_minutes}分記録",
+                        key="willdo_add_meeting_minute_btn", use_container_width=True
+                    )
+                    if meeting_record_btn:
+                        if meeting_name_input and (meeting_minutes >= 0) and (wraptime_minutes >= 0):
+                            Output_C.record_completed_meeting_WorkLog(
+                                willdo_date=selected_str,
+                                achievement_minutes=int(meeting_minutes),
+                                wraptime_minutes=int(wraptime_minutes),
+                                meeting_name=meeting_name_input,
+                                order_number=order_input,
+                                is_meeting_planned=is_meeting_planned
+                            )
+                            st.info("記録しました")
+                        else:
+                            st.warning("会議名とオーダと分数を全て入力してください")
+
+            with col_add_task:
                 st.markdown("#### Will-doリストにタスク追加", unsafe_allow_html=True)
 
                 # タスクID一覧を取得しセレクトボックスで選択
@@ -260,50 +322,6 @@ if __name__ == "__main__":
                         st.rerun()
                     else:
                         st.warning("タスクIDとサブタスクIDを両方入力してください")
-
-            # col_blankは何も表示しない（空白用）
-
-            with col_add2:
-                st.markdown("#### 打合せ実績を記録", unsafe_allow_html=True)
-                # OrderInformationクラスからオーダ番号一覧と略称取得
-                order_info = Task_def.OrderInformation()
-                order_numbers = order_info.df["order_number"].dropna().unique().tolist()
-                order_labels = []
-                order_number_map = {}
-                for order_number in order_numbers:
-                    pj_abbr = order_info.get_project_abbr(order_number)
-                    order_abbr = order_info.get_order_abbr(order_number)
-                    label = f"{pj_abbr} / {order_abbr}"
-                    order_labels.append(label)
-                    order_number_map[label] = order_number
-
-                meeting_name_input = st.text_input(
-                    "会議名", key="willdo_meetingname", placeholder="会議名", label_visibility="collapsed")
-                selected_label = st.selectbox(
-                    "オーダを選択", order_labels, key="willdo_order_selectbox", label_visibility="collapsed")
-                order_input = order_number_map[selected_label]
-
-                col_add2_minute, col_add2_btn = st.columns([1, 2])
-                with col_add2_minute:
-                    meeting_minutes = st.number_input(
-                        "分数入力", step=1, key="willdo_meeting_minute_input", placeholder="分", label_visibility="collapsed", value=None
-                    )
-                with col_add2_btn:
-                    meeting_record_btn = st.button(
-                        f"{meeting_minutes}分記録",
-                        key="willdo_add_meeting_minute_btn", use_container_width=True
-                    )
-                    if meeting_record_btn:
-                        if meeting_name_input and (meeting_minutes >= 0):
-                            Output_C.record_completed_meeting_WorkLog(
-                                willdo_date=selected_str,
-                                achievement_minutes=int(meeting_minutes),
-                                meeting_name=meeting_name_input,
-                                order_number=order_input
-                            )
-                            st.info("記録しました")
-                        else:
-                            st.warning("会議名とオーダと分数を全て入力してください")
 
         else:
             st.info("Will-doリスト未作成です")
