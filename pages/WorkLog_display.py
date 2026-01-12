@@ -40,6 +40,9 @@ if __name__ == "__main__":
 
         # 表示
         st.data_editor(summary_df, use_container_width=True, hide_index=True)
+        fig = Output_E.make_WorkLog_barchart(WorkLog_filepath)
+        if fig is not None:
+            st.pyplot(fig)
         st.table(df_display)
 
         st.markdown("#### サブタスク別集計")
