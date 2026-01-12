@@ -134,7 +134,8 @@ def continuously_start_and_record_WorkLog(
 
 def record_completed_meeting_WorkLog(
         willdo_date: str, achievement_minutes: int,
-        meeting_name: str, order_number: str
+        meeting_name: str, order_number: str,
+        is_meeting_planned: bool
         ) -> None:
     """2.3.3項 終了済み打合せの工数実績を記録する関数
 
@@ -143,13 +144,17 @@ def record_completed_meeting_WorkLog(
         achievement_minutes (int): 会議の実績時間（分）
         meeting_name (str): 会議名（タスク名として記録）
         order_number (str): オーダ番号
+        is_meeting_planned (bool): 会議が予定されていたものか突発的に発生したものか
     """
     # 1. 開始時刻と終了時刻を算出
     end_time = datetime.now()
     start_time = end_time - timedelta(minutes=int(achievement_minutes))
 
-    # 2. タスクidを 'MTG-HHMM' 形式で作成
-    task_id = f"MTG-{start_time.strftime('%H%M')}"
+    # 2. タスクidを 'MTG-HHMM' / 'DSC-HHMM'形式で作成
+    if is_meeting_planned:
+        task_id = f"MTG-{start_time.strftime('%H%M')}"
+    else:
+        task_id = f"DSC-{start_time.strftime('%H%M')}"
 
     # 3. 工数実績csvの既存の実績最終行に対する処理
     _update_last_worklog_row_if_overlap(willdo_date, start_time)

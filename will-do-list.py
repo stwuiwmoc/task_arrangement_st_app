@@ -221,7 +221,7 @@ if __name__ == "__main__":
                 st.warning("「今」が複数行選択されています")
 
             # タスクID・サブタスクID指定と会議名・オーダ指定で実績記録操作を2カラムで表示
-            col_add1, col_blank, col_add2 = st.columns([9, 3, 5])
+            col_add1, col_add2 = st.columns([9, 8])
 
             with col_add1:
                 st.markdown("#### Will-doリストにタスク追加", unsafe_allow_html=True)
@@ -261,8 +261,6 @@ if __name__ == "__main__":
                     else:
                         st.warning("タスクIDとサブタスクIDを両方入力してください")
 
-            # col_blankは何も表示しない（空白用）
-
             with col_add2:
                 st.markdown("#### 打合せ実績を記録", unsafe_allow_html=True)
                 # OrderInformationクラスからオーダ番号一覧と略称取得
@@ -279,9 +277,23 @@ if __name__ == "__main__":
 
                 meeting_name_input = st.text_input(
                     "会議名", key="willdo_meetingname", placeholder="会議名", label_visibility="collapsed")
-                selected_label = st.selectbox(
-                    "オーダを選択", order_labels, key="willdo_order_selectbox", label_visibility="collapsed")
-                order_input = order_number_map[selected_label]
+                col_add2_radio, col_add2_order = st.columns([4, 4])
+                with col_add2_radio:
+                    meeting_type = st.radio(
+                        "打合せ種別",
+                        ["突発", "予定"],
+                        horizontal=True,
+                        key="willdo_meeting_type_radio",
+                        label_visibility="collapsed"
+                    )
+                    if meeting_type == "突発":
+                        is_meeting_planned = False
+                    else:
+                        is_meeting_planned = True
+                with col_add2_order:
+                    selected_label = st.selectbox(
+                        "オーダを選択", order_labels, key="willdo_order_selectbox", label_visibility="collapsed")
+                    order_input = order_number_map[selected_label]
 
                 col_add2_minute, col_add2_btn = st.columns([1, 2])
                 with col_add2_minute:
@@ -299,7 +311,8 @@ if __name__ == "__main__":
                                 willdo_date=selected_str,
                                 achievement_minutes=int(meeting_minutes),
                                 meeting_name=meeting_name_input,
-                                order_number=order_input
+                                order_number=order_input,
+                                is_meeting_planned=is_meeting_planned
                             )
                             st.info("記録しました")
                         else:
