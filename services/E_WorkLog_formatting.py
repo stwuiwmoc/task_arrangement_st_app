@@ -3,6 +3,9 @@ import os
 import sys
 from datetime import datetime, timedelta
 
+import matplotlib
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -143,11 +146,21 @@ def calc_WorkLog_summary(csv_filepath: str, df_truncated: pd.DataFrame, add_dayt
     return df_output
 
 
-def make_WorkLog_barchart(csv_filepath: str):
+def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
+    """
+    工数実績CSVファイルから、1日を3つの時間帯（5:00～13:00、13:00～21:00、21:00～翌5:00）に分割した横棒グラフ（ガントチャート風）を作成して返す。
+
+    各CSV行ごとに色分けし、各時間帯ごとにサブプロットとして表示。
+    棒の縦幅は細め（0.4）で、x軸は1時間ごとに実線、15分ごとに点線グリッド。
+
+    Args:
+        csv_filepath (str): 工数実績CSVファイルのパス。
+
+    Returns:
+        matplotlib.figure.Figure: 作成した3分割ガントチャートのFigureオブジェクト。
+    """
     # 1. CSVファイルの全ての行・列をdataframeとして読み込む
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
-    import matplotlib.dates as mdates
-    import matplotlib.pyplot as plt
 
     df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
 
