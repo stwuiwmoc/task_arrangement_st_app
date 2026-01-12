@@ -43,15 +43,15 @@ if __name__ == "__main__":
         fig = Output_E.make_WorkLog_barchart(WorkLog_filepath)
         if fig is not None:
             st.pyplot(fig)
+        st.data_editor(
+            pd.read_csv(WorkLog_filepath, parse_dates=['開始時刻', '終了時刻']),
+            use_container_width=True)
+
         st.table(df_display)
 
         st.markdown("#### サブタスク別集計")
         st.data_editor(
             df_sum_subtask, use_container_width=True)
 
-        st.markdown("#### 工数実績csv生データ")
-        st.data_editor(
-            pd.read_csv(WorkLog_filepath, parse_dates=['開始時刻', '終了時刻']),
-            use_container_width=True)
     else:
         st.info("工数実績csv未作成です")
