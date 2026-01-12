@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     col_left, col_center, col_right = st.columns([2, 1, 1])
     with col_left:
-        st.markdown("#### ESS/BJP入力用処理")
+        st.markdown("#### ESS登録用出力")
 
     with col_center:
         add_daytime_break = st.checkbox("昼休憩を考慮", value=True)
@@ -44,10 +44,12 @@ if __name__ == "__main__":
         fig = Output_E.make_WorkLog_barchart(WorkLog_filepath)
         if fig is not None:
             st.pyplot(fig)
+        st.markdown("工数実績csv生データ")
         st.data_editor(
             pd.read_csv(WorkLog_filepath, parse_dates=['開始時刻', '終了時刻']),
             use_container_width=True)
 
+        st.markdown("#### BJP登録用出力")
         st.table(Output_E.convert_df_for_display(df_sum_order_withMTG))
 
         st.markdown("#### サブタスク別集計")
