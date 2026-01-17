@@ -91,257 +91,246 @@ if __name__ == "__main__":
 
     task_view.task_sidebar()
 
-    # 表示モード選択
+    # 本日分のWill-doリストcsv表示
     ESS_dt = Task_def.get_ESS_dt()
-    mode = st.radio(
-        "表示モード",
-        [f"本日分（{ESS_dt.month}/{ESS_dt.day}）表示", "過去分表示"],
-        horizontal=True, label_visibility="collapsed")
+    selected_str = ESS_dt.strftime("%y%m%d")
 
-    if mode == "過去分表示":
-        # 選択日付のWill-doリストcsv表示
-        pass
+    willdo_dir = os.path.join("data", "WillDo")
+    willdo_file = os.path.join(willdo_dir, f"WillDo{selected_str}.csv")
+    if os.path.exists(willdo_file):
+        df_today = pd.read_csv(willdo_file, encoding="utf-8-sig")
 
-    else:
-        # 本日分のWill-doリストcsv表示
-        selected_str = ESS_dt.strftime("%y%m%d")
+        # テーブル表示の詳細設定
+        aggrid_ret = WillDo_display_settings(df_today, use_filter=False)
 
-        willdo_dir = os.path.join("data", "WillDo")
-        willdo_file = os.path.join(willdo_dir, f"WillDo{selected_str}.csv")
-        if os.path.exists(willdo_file):
-            df_today = pd.read_csv(willdo_file, encoding="utf-8-sig")
+        # 差分があれば自動保存
+        edited_df = aggrid_ret["data"] if "data" in aggrid_ret else df_today
+        if not edited_df.equals(df_today):
+            edited_df.to_csv(willdo_file, index=False, encoding="utf-8-sig")
 
-            # テーブル表示の詳細設定
-            aggrid_ret = WillDo_display_settings(df_today, use_filter=False)
+        # タイマー処理
+        # 状態列が"今"の行数を取得し、行数に応じた処理
+        now_count = edited_df[edited_df["状態"] == "今"].shape[0]
+        if now_count == 0:
+            st.write("「今」が選択されていません")
+        elif now_count == 1:
+            now_row = edited_df[edited_df["状態"] == "今"].iloc[0]
+            st.write(f"**選択中：{now_row['タスクID']} {now_row['サブID']}「{now_row['タスク名']}」の「{now_row['サブ名']}」**")
+            radio_minutes = [15, 8, now_row["見込み"], math.ceil(now_row["残時間/日"])]
 
-            # 差分があれば自動保存
-            edited_df = aggrid_ret["data"] if "data" in aggrid_ret else df_today
-            if not edited_df.equals(df_today):
-                edited_df.to_csv(willdo_file, index=False, encoding="utf-8-sig")
+            col_timer1, col_timer2, col_record_task = st.columns([8, 2, 8], border=True)
 
-            # タイマー処理
-            # 状態列が"今"の行数を取得し、行数に応じた処理
-            now_count = edited_df[edited_df["状態"] == "今"].shape[0]
-            if now_count == 0:
-                st.write("「今」が選択されていません")
-            elif now_count == 1:
-                now_row = edited_df[edited_df["状態"] == "今"].iloc[0]
-                st.write(f"**選択中：{now_row['タスクID']} {now_row['サブID']}「{now_row['タスク名']}」の「{now_row['サブ名']}」**")
-                radio_minutes = [15, 8, now_row["見込み"], math.ceil(now_row["残時間/日"])]
-
-                col_timer1, col_timer2, col_record_task = st.columns([8, 2, 8], border=True)
-
-                with col_timer1:
-                    # タイマー開始ボタン
-                    col_timer1_radio, col_timer1_btn = st.columns([6, 2])
-                    with col_timer1_radio:
-                        # ラジオボタンで選択肢を作成
-                        radio_options = [
-                            f"標準{radio_minutes[0]}分",
-                            f"標準{radio_minutes[1]}分",
-                            f"見込{radio_minutes[2]}分",
-                            f"残/日{radio_minutes[3]}分"
-                        ]
-                        selected_idx = radio_options.index(
-                            st.radio(
-                                "タイマー選択", radio_options, key="willdo_timer_radio",
-                                horizontal=True, label_visibility="collapsed"
-                            )
+            with col_timer1:
+                # タイマー開始ボタン
+                col_timer1_radio, col_timer1_btn = st.columns([6, 2])
+                with col_timer1_radio:
+                    # ラジオボタンで選択肢を作成
+                    radio_options = [
+                        f"標準{radio_minutes[0]}分",
+                        f"標準{radio_minutes[1]}分",
+                        f"見込{radio_minutes[2]}分",
+                        f"残/日{radio_minutes[3]}分"
+                    ]
+                    selected_idx = radio_options.index(
+                        st.radio(
+                            "タイマー選択", radio_options, key="willdo_timer_radio",
+                            horizontal=True, label_visibility="collapsed"
                         )
-                    with col_timer1_btn:
-                        if st.button(f"{radio_minutes[selected_idx]}分  \n開始", key="willdo_timer1_btn", use_container_width=True):
-                            Output_C.start_new_timer_and_record_WorkLog(
+                    )
+                with col_timer1_btn:
+                    if st.button(f"{radio_minutes[selected_idx]}分  \n開始", key="willdo_timer1_btn", use_container_width=True):
+                        Output_C.start_new_timer_and_record_WorkLog(
+                            willdo_date=selected_str,
+                            timer_minutes=int(radio_minutes[selected_idx]),
+                            task_id=now_row["タスクID"],
+                            subtask_id=now_row["サブID"]
+                        )
+                        st.success("開始しました")
+
+            with col_timer2:
+                # 続けて開始ボタン
+                if st.button(f"続けて  \n開始", key="willdo_timer2_btn", type="tertiary", use_container_width=True):
+
+                    # 続けて開始ボタンを使えるのは、直前サブタスクの終了時刻がまだ来てない場合のみ
+                    if datetime.now() < Output_C.check_WorkLog_latest_end_datetime(selected_str):
+                        Output_C.continuously_start_and_record_WorkLog(
+                            willdo_date=selected_str,
+                            task_id=now_row["タスクID"],
+                            subtask_id=now_row["サブID"]
+                        )
+                        st.success("開始しました")
+                    else:
+                        st.warning("直前のサブタスク終了時刻を過ぎているため、続けて開始できません。新規にタイマーを開始してください。")
+
+            with col_record_task:
+                # 実績記録ボタン
+                col_record_task_minute, col_record_task_wraptime, col_record_task_btn = st.columns([2.5, 2.5, 2])
+                with col_record_task_minute:
+                    task_achievement_minutes = st.number_input(
+                        "分数入力", step=1, key="minute_input", placeholder="実績", label_visibility="collapsed", value=None
+                    )
+                    if task_achievement_minutes is None:
+                        task_achievement_minutes = 0
+                with col_record_task_wraptime:
+                    task_wraptime_minutes = st.number_input(
+                        "経過時間", step=1, key="wraptime_input", placeholder="終了後経過", label_visibility="collapsed", value=None
+                    )
+                    if task_wraptime_minutes is None:
+                        task_wraptime_minutes = 0
+                with col_record_task_btn:
+                    record_button = st.button(
+                        f"{task_achievement_minutes}分  \n記録",
+                        key="willdo_timer3_btn", use_container_width=True)
+                    if record_button:
+                        if (task_achievement_minutes is not None) and (task_wraptime_minutes is not None):
+                            Output_C.record_completed_task_WorkLog(
                                 willdo_date=selected_str,
-                                timer_minutes=int(radio_minutes[selected_idx]),
+                                achievement_minutes=int(task_achievement_minutes),
+                                wraptime_minutes=int(task_wraptime_minutes),
                                 task_id=now_row["タスクID"],
                                 subtask_id=now_row["サブID"]
                             )
-                            st.success("開始しました")
-
-                with col_timer2:
-                    # 続けて開始ボタン
-                    if st.button(f"続けて  \n開始", key="willdo_timer2_btn", type="tertiary", use_container_width=True):
-
-                        # 続けて開始ボタンを使えるのは、直前サブタスクの終了時刻がまだ来てない場合のみ
-                        if datetime.now() < Output_C.check_WorkLog_latest_end_datetime(selected_str):
-                            Output_C.continuously_start_and_record_WorkLog(
-                                willdo_date=selected_str,
-                                task_id=now_row["タスクID"],
-                                subtask_id=now_row["サブID"]
-                            )
-                            st.success("開始しました")
+                            st.success("記録しました")
                         else:
-                            st.warning("直前のサブタスク終了時刻を過ぎているため、続けて開始できません。新規にタイマーを開始してください。")
-
-                with col_record_task:
-                    # 実績記録ボタン
-                    col_record_task_minute, col_record_task_wraptime, col_record_task_btn = st.columns([2.5, 2.5, 2])
-                    with col_record_task_minute:
-                        task_achievement_minutes = st.number_input(
-                            "分数入力", step=1, key="minute_input", placeholder="実績", label_visibility="collapsed", value=None
-                        )
-                        if task_achievement_minutes is None:
-                            task_achievement_minutes = 0
-                    with col_record_task_wraptime:
-                        task_wraptime_minutes = st.number_input(
-                            "経過時間", step=1, key="wraptime_input", placeholder="終了後経過", label_visibility="collapsed", value=None
-                        )
-                        if task_wraptime_minutes is None:
-                            task_wraptime_minutes = 0
-                    with col_record_task_btn:
-                        record_button = st.button(
-                            f"{task_achievement_minutes}分  \n記録",
-                            key="willdo_timer3_btn", use_container_width=True)
-                        if record_button:
-                            if (task_achievement_minutes is not None) and (task_wraptime_minutes is not None):
-                                Output_C.record_completed_task_WorkLog(
-                                    willdo_date=selected_str,
-                                    achievement_minutes=int(task_achievement_minutes),
-                                    wraptime_minutes=int(task_wraptime_minutes),
-                                    task_id=now_row["タスクID"],
-                                    subtask_id=now_row["サブID"]
-                                )
-                                st.success("記録しました")
-                            else:
-                                st.warning("分数を両方入力してください")
-
-            else:
-                st.warning("「今」が複数行選択されています")
-
-            # タスクID・サブタスクID指定と会議名・オーダ指定で実績記録操作を2カラムで表示
-            col_record_meeting, col_add_task = st.columns([10, 8])
-
-            with col_record_meeting:
-                st.markdown("#### 打合せ実績を記録", unsafe_allow_html=True)
-                # OrderInformationクラスからオーダ番号一覧と略称取得
-                order_info = Task_def.OrderInformation()
-                order_numbers = order_info.df["order_number"].dropna().unique().tolist()
-                order_labels = []
-                order_number_map = {}
-                for order_number in order_numbers:
-                    pj_abbr = order_info.get_project_abbr(order_number)
-                    order_abbr = order_info.get_order_abbr(order_number)
-                    label = f"{pj_abbr} / {order_abbr}"
-                    order_labels.append(label)
-                    order_number_map[label] = order_number
-
-                meeting_name_input = st.text_input(
-                    "会議名", key="willdo_meetingname", placeholder="会議名", label_visibility="collapsed")
-                col_record_meeting_order, col_record_meeting_radio = st.columns([6, 4])
-                with col_record_meeting_radio:
-                    meeting_type = st.radio(
-                        "打合せ種別",
-                        ["突発", "予定"],
-                        horizontal=True,
-                        key="willdo_meeting_type_radio",
-                        label_visibility="collapsed"
-                    )
-                    if meeting_type == "突発":
-                        is_meeting_planned = False
-                    else:
-                        is_meeting_planned = True
-                with col_record_meeting_order:
-                    selected_label = st.selectbox(
-                        "オーダを選択", order_labels, key="willdo_order_selectbox", label_visibility="collapsed")
-                    order_input = order_number_map[selected_label]
-
-                col_record_achievement_minute, col_record_wraptime_minute, col_record_meeting_btn = st.columns([3, 3, 4])
-                with col_record_achievement_minute:
-                    meeting_minutes = st.number_input(
-                        "分数入力", key="willdo_meeting_minute_input", placeholder="実績", label_visibility="collapsed", value=None
-                    )
-                with col_record_wraptime_minute:
-                    wraptime_minutes = st.number_input(
-                        "経過時間", key="willdo_meeting_wraptime_input", placeholder="終了後経過", label_visibility="collapsed", value=None
-                    )
-                with col_record_meeting_btn:
-                    meeting_record_btn = st.button(
-                        f"{meeting_minutes}分記録",
-                        key="willdo_add_meeting_minute_btn", use_container_width=True
-                    )
-                    if meeting_record_btn:
-                        if meeting_name_input and (meeting_minutes is not None) and (wraptime_minutes is not None):
-                            Output_C.record_completed_meeting_WorkLog(
-                                willdo_date=selected_str,
-                                achievement_minutes=int(meeting_minutes),
-                                wraptime_minutes=int(wraptime_minutes),
-                                meeting_name=meeting_name_input,
-                                order_number=order_input,
-                                is_meeting_planned=is_meeting_planned
-                            )
-                            st.info("記録しました")
-                        else:
-                            st.warning("会議名とオーダと分数を全て入力してください")
-
-            with col_add_task:
-                st.markdown("#### Will-doリストにタスク追加", unsafe_allow_html=True)
-
-                # タスクID一覧を取得しセレクトボックスで選択
-                task_choices, task_id_to_csv = task_view.get_task_choices(
-                    choice_from_active=True,
-                    include_task_name=True)
-                task_id_label = st.selectbox(
-                    "タスクIDを選択", sorted(task_choices), key="willdo_taskid_selectbox", label_visibility="collapsed"
-                )
-                # ラベルからタスクIDのみ抽出
-                if task_choices:
-                    task_id_input = task_id_label.split("：")[0]
-                else:
-                    task_id_input = task_id_label
-
-                # サブタスクID一覧を取得しセレクトボックスで選択
-                subtask_choices = task_view.get_subtask_choices(task_id_input, include_subtask_name=True)
-                subtask_id_label = st.selectbox(
-                    "サブタスクIDを選択", subtask_choices, key="willdo_subtaskid_selectbox", label_visibility="collapsed"
-                )
-                # ラベルからサブタスクIDのみ抽出
-                if subtask_choices:
-                    subtask_id_input = subtask_id_label.split("：")[0]
-                else:
-                    subtask_id_input = subtask_id_label
-
-                # 追加ボタン押下でWillDoにタスク追加
-                add_btn = st.button(
-                    f"{task_id_input} / {subtask_id_input} を追加",
-                    key="willdo_add_btn", use_container_width=True)
-                if add_btn:
-                    if task_id_input and subtask_id_input:
-                        Output_B.add_WillDo_Task_with_ID(task_id_input, subtask_id_input)
-                        st.rerun()
-                    else:
-                        st.warning("タスクIDとサブタスクIDを両方入力してください")
+                            st.warning("分数を両方入力してください")
 
         else:
-            st.info("Will-doリスト未作成です")
+            st.warning("「今」が複数行選択されています")
 
-        # Will-doリスト初期化操作を2カラムで表示（チェックボックス方式）
-        st.markdown("#### Will-doリスト初期化", unsafe_allow_html=True)
-        col_chk, col_exec = st.columns([2, 1])
+        # タスクID・サブタスクID指定と会議名・オーダ指定で実績記録操作を2カラムで表示
+        col_record_meeting, col_add_task = st.columns([10, 8])
 
-        # チェックボックスの値リセットは、rerun後に初期値を渡すことで対応
-        # Streamlitの仕様上、セッションステートで直接値を変更できないため、keyを変更して強制リセット
-        if "willdo_chk_reset_id" not in st.session_state:
-            st.session_state["willdo_chk_reset_id"] = 0
+        with col_record_meeting:
+            st.markdown("#### 打合せ実績を記録", unsafe_allow_html=True)
+            # OrderInformationクラスからオーダ番号一覧と略称取得
+            order_info = Task_def.OrderInformation()
+            order_numbers = order_info.df["order_number"].dropna().unique().tolist()
+            order_labels = []
+            order_number_map = {}
+            for order_number in order_numbers:
+                pj_abbr = order_info.get_project_abbr(order_number)
+                order_abbr = order_info.get_order_abbr(order_number)
+                label = f"{pj_abbr} / {order_abbr}"
+                order_labels.append(label)
+                order_number_map[label] = order_number
 
-        chk_daily = chk_project = False
-        with col_chk:
-            chk_daily = st.checkbox(
-                "デイリータスクのみの新規Will-doリストを作成",
-                key=f"willdo_chk_daily_{st.session_state['willdo_chk_reset_id']}"
+            meeting_name_input = st.text_input(
+                "会議名", key="willdo_meetingname", placeholder="会議名", label_visibility="collapsed")
+            col_record_meeting_order, col_record_meeting_radio = st.columns([6, 4])
+            with col_record_meeting_radio:
+                meeting_type = st.radio(
+                    "打合せ種別",
+                    ["突発", "予定"],
+                    horizontal=True,
+                    key="willdo_meeting_type_radio",
+                    label_visibility="collapsed"
+                )
+                if meeting_type == "突発":
+                    is_meeting_planned = False
+                else:
+                    is_meeting_planned = True
+            with col_record_meeting_order:
+                selected_label = st.selectbox(
+                    "オーダを選択", order_labels, key="willdo_order_selectbox", label_visibility="collapsed")
+                order_input = order_number_map[selected_label]
+
+            col_record_achievement_minute, col_record_wraptime_minute, col_record_meeting_btn = st.columns([3, 3, 4])
+            with col_record_achievement_minute:
+                meeting_minutes = st.number_input(
+                    "分数入力", key="willdo_meeting_minute_input", placeholder="実績", label_visibility="collapsed", value=None
+                )
+            with col_record_wraptime_minute:
+                wraptime_minutes = st.number_input(
+                    "経過時間", key="willdo_meeting_wraptime_input", placeholder="終了後経過", label_visibility="collapsed", value=None
+                )
+            with col_record_meeting_btn:
+                meeting_record_btn = st.button(
+                    f"{meeting_minutes}分記録",
+                    key="willdo_add_meeting_minute_btn", use_container_width=True
+                )
+                if meeting_record_btn:
+                    if meeting_name_input and (meeting_minutes is not None) and (wraptime_minutes is not None):
+                        Output_C.record_completed_meeting_WorkLog(
+                            willdo_date=selected_str,
+                            achievement_minutes=int(meeting_minutes),
+                            wraptime_minutes=int(wraptime_minutes),
+                            meeting_name=meeting_name_input,
+                            order_number=order_input,
+                            is_meeting_planned=is_meeting_planned
+                        )
+                        st.info("記録しました")
+                    else:
+                        st.warning("会議名とオーダと分数を全て入力してください")
+
+        with col_add_task:
+            st.markdown("#### Will-doリストにタスク追加", unsafe_allow_html=True)
+
+            # タスクID一覧を取得しセレクトボックスで選択
+            task_choices, task_id_to_csv = task_view.get_task_choices(
+                choice_from_active=True,
+                include_task_name=True)
+            task_id_label = st.selectbox(
+                "タスクIDを選択", sorted(task_choices), key="willdo_taskid_selectbox", label_visibility="collapsed"
             )
-            chk_project = st.checkbox(
-                "プロジェクトタスクをWill-doリストに追加",
-                key=f"willdo_chk_project_{st.session_state['willdo_chk_reset_id']}"
+            # ラベルからタスクIDのみ抽出
+            if task_choices:
+                task_id_input = task_id_label.split("：")[0]
+            else:
+                task_id_input = task_id_label
+
+            # サブタスクID一覧を取得しセレクトボックスで選択
+            subtask_choices = task_view.get_subtask_choices(task_id_input, include_subtask_name=True)
+            subtask_id_label = st.selectbox(
+                "サブタスクIDを選択", subtask_choices, key="willdo_subtaskid_selectbox", label_visibility="collapsed"
             )
-        with col_exec:
-            if st.button("初期化実行", key="willdo_init_exec"):
-                # 実行後にkeyを変更してチェックボックスをリセット
-                st.session_state["willdo_chk_reset_id"] += 1
-                if chk_daily:
-                    Output_B.create_new_WillDo_with_DailyTasks()
-                    st.rerun()
-                elif chk_project:
-                    Output_B.add_WillDo_all_ProjectTasks()
+            # ラベルからサブタスクIDのみ抽出
+            if subtask_choices:
+                subtask_id_input = subtask_id_label.split("：")[0]
+            else:
+                subtask_id_input = subtask_id_label
+
+            # 追加ボタン押下でWillDoにタスク追加
+            add_btn = st.button(
+                f"{task_id_input} / {subtask_id_input} を追加",
+                key="willdo_add_btn", use_container_width=True)
+            if add_btn:
+                if task_id_input and subtask_id_input:
+                    Output_B.add_WillDo_Task_with_ID(task_id_input, subtask_id_input)
                     st.rerun()
                 else:
-                    st.info("何も実行されませんでした。")
+                    st.warning("タスクIDとサブタスクIDを両方入力してください")
+
+    else:
+        st.info("Will-doリスト未作成です")
+
+    # Will-doリスト初期化操作を2カラムで表示（チェックボックス方式）
+    st.markdown("#### Will-doリスト初期化", unsafe_allow_html=True)
+    col_chk, col_exec = st.columns([2, 1])
+
+    # チェックボックスの値リセットは、rerun後に初期値を渡すことで対応
+    # Streamlitの仕様上、セッションステートで直接値を変更できないため、keyを変更して強制リセット
+    if "willdo_chk_reset_id" not in st.session_state:
+        st.session_state["willdo_chk_reset_id"] = 0
+
+    chk_daily = chk_project = False
+    with col_chk:
+        chk_daily = st.checkbox(
+            "デイリータスクのみの新規Will-doリストを作成",
+            key=f"willdo_chk_daily_{st.session_state['willdo_chk_reset_id']}"
+        )
+        chk_project = st.checkbox(
+            "プロジェクトタスクをWill-doリストに追加",
+            key=f"willdo_chk_project_{st.session_state['willdo_chk_reset_id']}"
+        )
+    with col_exec:
+        if st.button("初期化実行", key="willdo_init_exec"):
+            # 実行後にkeyを変更してチェックボックスをリセット
+            st.session_state["willdo_chk_reset_id"] += 1
+            if chk_daily:
+                Output_B.create_new_WillDo_with_DailyTasks()
+                st.rerun()
+            elif chk_project:
+                Output_B.add_WillDo_all_ProjectTasks()
+                st.rerun()
+            else:
+                st.info("何も実行されませんでした。")
