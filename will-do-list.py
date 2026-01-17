@@ -151,18 +151,18 @@ if __name__ == "__main__":
                 st.write(f"**選択中：{now_row['タスクID']} {now_row['サブID']}「{now_row['タスク名']}」の「{now_row['サブ名']}」**")
                 radio_minutes = [15, 8, now_row["見込み"], math.ceil(now_row["残時間/日"])]
 
-                col_timer1, col_timer2, col_record_task = st.columns([9, 3, 5], border=True)
+                col_timer1, col_timer2, col_record_task = st.columns([8, 2, 8], border=True)
 
                 with col_timer1:
                     # タイマー開始ボタン
-                    col_timer1_radio, col_timer1_btn = st.columns([6, 3])
+                    col_timer1_radio, col_timer1_btn = st.columns([6, 2])
                     with col_timer1_radio:
                         # ラジオボタンで選択肢を作成
                         radio_options = [
                             f"標準{radio_minutes[0]}分",
                             f"標準{radio_minutes[1]}分",
                             f"見込{radio_minutes[2]}分",
-                            f"残時間{radio_minutes[3]}分"
+                            f"残/日{radio_minutes[3]}分"
                         ]
                         selected_idx = radio_options.index(
                             st.radio(
@@ -171,7 +171,7 @@ if __name__ == "__main__":
                             )
                         )
                     with col_timer1_btn:
-                        if st.button(f"{radio_minutes[selected_idx]}分開始", key="willdo_timer1_btn", use_container_width=True):
+                        if st.button(f"{radio_minutes[selected_idx]}分  \n開始", key="willdo_timer1_btn", use_container_width=True):
                             Output_C.start_new_timer_and_record_WorkLog(
                                 willdo_date=selected_str,
                                 timer_minutes=int(radio_minutes[selected_idx]),
@@ -182,7 +182,7 @@ if __name__ == "__main__":
 
                 with col_timer2:
                     # 続けて開始ボタン
-                    if st.button(f"続けて開始", key="willdo_timer2_btn", type="tertiary", use_container_width=True):
+                    if st.button(f"続けて  \n開始", key="willdo_timer2_btn", type="tertiary", use_container_width=True):
 
                         # 続けて開始ボタンを使えるのは、直前サブタスクの終了時刻がまだ来てない場合のみ
                         if datetime.now() < Output_C.check_WorkLog_latest_end_datetime(selected_str):
@@ -197,21 +197,28 @@ if __name__ == "__main__":
 
                 with col_record_task:
                     # 実績記録ボタン
-                    col_record_task_minute, col_record_task_btn = st.columns([2, 2])
+                    col_record_task_minute, col_record_task_wraptime, col_record_task_btn = st.columns([2.5, 2.5, 2])
                     with col_record_task_minute:
-                        custom_minutes = st.number_input(
-                            "分数入力", step=1, key="minute_input", placeholder="分", label_visibility="collapsed", value=None
+                        task_achievement_minutes = st.number_input(
+                            "分数入力", step=1, key="minute_input", placeholder="実績", label_visibility="collapsed", value=None
                         )
-                        if custom_minutes is None:
-                            custom_minutes = 0
+                        if task_achievement_minutes is None:
+                            task_achievement_minutes = 0
+                    with col_record_task_wraptime:
+                        task_wraptime_minutes = st.number_input(
+                            "経過時間", step=1, key="wraptime_input", placeholder="終了後経過", label_visibility="collapsed", value=None
+                        )
+                        if task_wraptime_minutes is None:
+                            task_wraptime_minutes = 0
                     with col_record_task_btn:
                         record_button = st.button(
-                            f"{custom_minutes}分記録",
+                            f"{task_achievement_minutes}分  \n記録",
                             key="willdo_timer3_btn", use_container_width=True)
                         if record_button:
                             Output_C.record_completed_task_WorkLog(
                                 willdo_date=selected_str,
-                                achievement_minutes=int(custom_minutes),
+                                achievement_minutes=int(task_achievement_minutes),
+                                wraptime_minutes=int(task_wraptime_minutes),
                                 task_id=now_row["タスクID"],
                                 subtask_id=now_row["サブID"]
                             )
@@ -221,7 +228,7 @@ if __name__ == "__main__":
                 st.warning("「今」が複数行選択されています")
 
             # タスクID・サブタスクID指定と会議名・オーダ指定で実績記録操作を2カラムで表示
-            col_record_meeting, col_add_task = st.columns([9, 8])
+            col_record_meeting, col_add_task = st.columns([10, 8])
 
             with col_record_meeting:
                 st.markdown("#### 打合せ実績を記録", unsafe_allow_html=True)
@@ -239,7 +246,7 @@ if __name__ == "__main__":
 
                 meeting_name_input = st.text_input(
                     "会議名", key="willdo_meetingname", placeholder="会議名", label_visibility="collapsed")
-                col_record_meeting_order, col_record_meeting_radio = st.columns([5, 4])
+                col_record_meeting_order, col_record_meeting_radio = st.columns([6, 4])
                 with col_record_meeting_radio:
                     meeting_type = st.radio(
                         "打合せ種別",
@@ -257,14 +264,14 @@ if __name__ == "__main__":
                         "オーダを選択", order_labels, key="willdo_order_selectbox", label_visibility="collapsed")
                     order_input = order_number_map[selected_label]
 
-                col_record_achievement_minute, col_record_wraptime_minute, col_record_meeting_btn = st.columns([2.5, 2.5, 4])
+                col_record_achievement_minute, col_record_wraptime_minute, col_record_meeting_btn = st.columns([3, 3, 4])
                 with col_record_achievement_minute:
                     meeting_minutes = st.number_input(
-                        "分数入力", step=1, key="willdo_meeting_minute_input", placeholder="実績", label_visibility="collapsed", value=None
+                        "分数入力", key="willdo_meeting_minute_input", placeholder="実績", label_visibility="collapsed", value=None
                     )
                 with col_record_wraptime_minute:
                     wraptime_minutes = st.number_input(
-                        "経過時間", step=1, key="willdo_meeting_wraptime_input", placeholder="終了後経過", label_visibility="collapsed", value=None
+                        "経過時間", key="willdo_meeting_wraptime_input", placeholder="終了後経過", label_visibility="collapsed", value=None
                     )
                 with col_record_meeting_btn:
                     meeting_record_btn = st.button(
