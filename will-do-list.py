@@ -197,21 +197,28 @@ if __name__ == "__main__":
 
                 with col_record_task:
                     # 実績記録ボタン
-                    col_record_task_minute, col_record_task_btn = st.columns([2, 2])
+                    col_record_task_minute, col_record_task_wraptime, col_record_task_btn = st.columns([1, 1, 2])
                     with col_record_task_minute:
-                        custom_minutes = st.number_input(
-                            "分数入力", step=1, key="minute_input", placeholder="分", label_visibility="collapsed", value=None
+                        task_achievement_minutes = st.number_input(
+                            "分数入力", step=1, key="minute_input", placeholder="実績", label_visibility="collapsed", value=None
                         )
-                        if custom_minutes is None:
-                            custom_minutes = 0
+                        if task_achievement_minutes is None:
+                            task_achievement_minutes = 0
+                    with col_record_task_wraptime:
+                        task_wraptime_minutes = st.number_input(
+                            "終了後経過時間", step=1, key="wraptime_input", placeholder="終了後経過", label_visibility="collapsed", value=None
+                        )
+                        if task_wraptime_minutes is None:
+                            task_wraptime_minutes = 0
                     with col_record_task_btn:
                         record_button = st.button(
-                            f"{custom_minutes}分記録",
+                            f"{task_achievement_minutes}分記録",
                             key="willdo_timer3_btn", use_container_width=True)
                         if record_button:
                             Output_C.record_completed_task_WorkLog(
                                 willdo_date=selected_str,
-                                achievement_minutes=int(custom_minutes),
+                                achievement_minutes=int(task_achievement_minutes),
+                                wraptime_minutes=int(task_wraptime_minutes),
                                 task_id=now_row["タスクID"],
                                 subtask_id=now_row["サブID"]
                             )

@@ -185,7 +185,7 @@ def record_completed_meeting_WorkLog(
 
 
 def record_completed_task_WorkLog(
-        willdo_date: str, achievement_minutes: int,
+        willdo_date: str, achievement_minutes: int, wraptime_minutes: int,
         task_id: str, subtask_id: str,
         ) -> None:
     """2.3.3項 終了済みタスクの工数実績を記録する関数
@@ -193,11 +193,12 @@ def record_completed_task_WorkLog(
     Args:
         willdo_date (str): 呼び出し元のWillDoリストcsvの日付（YYMMDD形式）
         achievement_minutes (int): タスクの実績時間（分）
+        wraptime_minutes (int): 記録対象の会議の後の経過時間（分）
         task_id (str): タスクID
         subtask_id (str): サブタスクID
     """
     # 1. 開始時刻と終了時刻を算出
-    end_time = datetime.now()
+    end_time = datetime.now() - timedelta(minutes=int(wraptime_minutes))
     start_time = end_time - timedelta(minutes=int(achievement_minutes))
 
     # 2. 工数実績csvの既存の実績最終行に対する処理
