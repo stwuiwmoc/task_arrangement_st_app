@@ -85,6 +85,22 @@ def WillDo_display_settings(
     )
     return aggrid_ret
 
+# 入力値が半角数字以外ならNoneにする関数
+def sanitize_halfwidth_digit(val: str) -> str | None:
+    """
+    入力値が半角数字（0-9）のみで構成されていればそのまま返し、
+    それ以外（全角数字や記号、空文字、Noneなど）はNoneを返す。
+
+    Args:
+        val (str): 入力値（文字列またはNone）
+
+    Returns:
+        str | None: 半角数字のみならその値、そうでなければNone
+    """
+    if val is not None and (val.isdigit() and all('0' <= c <= '9' for c in val)):
+        return val
+    return None
+
 
 if __name__ == "__main__":
     st.set_page_config(layout="wide")
@@ -165,17 +181,15 @@ if __name__ == "__main__":
                 # 実績記録ボタン
                 col_record_task_minute, col_record_task_wraptime, col_record_task_btn = st.columns([2.5, 2.5, 2])
                 with col_record_task_minute:
-                    task_achievement_minutes = st.number_input(
-                        "分数入力", step=1, key="minute_input", placeholder="実績", label_visibility="collapsed", value=None
+                    task_achievement_minutes = st.text_input(
+                        "分数入力", key="minute_input", placeholder="実績", label_visibility="collapsed", value=None
                     )
-                    if task_achievement_minutes is None:
-                        task_achievement_minutes = 0
+                    task_achievement_minutes = sanitize_halfwidth_digit(task_achievement_minutes)
                 with col_record_task_wraptime:
-                    task_wraptime_minutes = st.number_input(
-                        "経過時間", step=1, key="wraptime_input", placeholder="終了後経過", label_visibility="collapsed", value=None
+                    task_wraptime_minutes = st.text_input(
+                        "経過時間", key="wraptime_input", placeholder="終了後経過", label_visibility="collapsed", value=None
                     )
-                    if task_wraptime_minutes is None:
-                        task_wraptime_minutes = 0
+                    task_wraptime_minutes = sanitize_halfwidth_digit(task_wraptime_minutes)
                 with col_record_task_btn:
                     record_button = st.button(
                         f"{task_achievement_minutes}分  \n記録",
@@ -235,13 +249,15 @@ if __name__ == "__main__":
 
             col_record_achievement_minute, col_record_wraptime_minute, col_record_meeting_btn = st.columns([3, 3, 4])
             with col_record_achievement_minute:
-                meeting_minutes = st.number_input(
+                meeting_minutes = st.text_input(
                     "分数入力", key="willdo_meeting_minute_input", placeholder="実績", label_visibility="collapsed", value=None
                 )
+                meeting_minutes = sanitize_halfwidth_digit(meeting_minutes)
             with col_record_wraptime_minute:
-                wraptime_minutes = st.number_input(
+                wraptime_minutes = st.text_input(
                     "経過時間", key="willdo_meeting_wraptime_input", placeholder="終了後経過", label_visibility="collapsed", value=None
                 )
+                wraptime_minutes = sanitize_halfwidth_digit(wraptime_minutes)
             with col_record_meeting_btn:
                 meeting_record_btn = st.button(
                     f"{meeting_minutes}分記録",
