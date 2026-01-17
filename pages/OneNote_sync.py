@@ -26,7 +26,7 @@ if __name__ == "__main__":
     st.markdown("#### OneNote同期判定")
 
     df = Output_A.task_identify_first_half()
-    # st.dataframe(df, use_container_width=True)  # デバッグ用表示
+    # st.dataframe(df, width="stretch")  # デバッグ用表示
 
     # 編集画面用に表示する行・列のみフィルタ
     if df.empty:
@@ -43,12 +43,12 @@ if __name__ == "__main__":
         # 自動反映dfの表示
         st.markdown("自動反映予定の項目")
         df_auto["update_csv"] = df_auto["update_csv"].astype(bool)
-        edited_df_auto = st.data_editor(df_auto, use_container_width=True)
+        edited_df_auto = st.data_editor(df_auto, width="stretch")
 
         # 要確認dfの編集
         st.markdown("反映有無の確認が必要な項目")
         df_confirm["update_csv"] = df_confirm["update_csv"].astype(bool)
-        edited_df_confirm = st.data_editor(df_confirm, use_container_width=True)
+        edited_df_confirm = st.data_editor(df_confirm, width="stretch")
 
         # 編集後の2つのdfから全行・全列そろった編集後のdfを作成
         edited_df = df.copy()
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         # 自動反映部分はupdate_csv列だけ反映（他列は元のまま）
         edited_df.loc[~confirm_rows, auto_cols] = edited_df_auto
 
-        # st.dataframe(edited_df, use_container_width=True) # デバッグ用表示
+        # st.dataframe(edited_df, width="stretch") # デバッグ用表示
 
         # 確認済みの更新内容を反映（ボタンで実行）
         if st.button("反映内容を確定してCSVに反映", key="onenote_sync_apply"):
@@ -67,4 +67,4 @@ if __name__ == "__main__":
     # オーダ管理csvの表示
     st.markdown("#### オーダ番号コピペ用")
     order_info = Task_def.OrderInformation()
-    st.dataframe(order_info.df, use_container_width=True)
+    st.dataframe(order_info.df, width="stretch")

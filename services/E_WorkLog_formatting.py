@@ -12,28 +12,31 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models.Task_definition as Task_def
 
 
-def sum_df_each_subtask(csv_filepath: str) -> pd.DataFrame:
+def sum_df_each_subtask(csv_filepath: str, include_MTG: bool) -> pd.DataFrame:
 
     # 1. CSVファイルの全ての行・列をdataframeとして読み込む
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
     df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
-    # 2. 終了時刻列と開始時刻列の差分を計算し、時間列（分）を追加する
+    # 2. MTG行のフィルタリング（タスクID列に'MTG'を含むかどうか）
+    if not include_MTG:
+        df = df[~df['タスクID'].astype(str).str.contains('MTG', na=False)]
+    # 3. 終了時刻列と開始時刻列の差分を計算し、時間列（分）を追加する
     df['実時間'] = (df['終了時刻'] - df['開始時刻']).dt.total_seconds() / 60
-    # 3. 終了時刻列と開始時刻列を削除
+    # 4. 終了時刻列と開始時刻列を削除
     df = df.drop(columns=['開始時刻', '終了時刻'])
 
-    # 4. 列結合と削除
-    # 4-1. タスクID列・サブタスクID列を結合し、新しい列「ID」列を作成する
+    # 5. 列結合と削除
+    # 5-1. タスクID列・サブタスクID列を結合し、新しい列「ID」列を作成する
     # ※ 結合ルール : タスクID + サブタスクID
     df['ID'] = df['タスクID'].astype(str) + df['サブタスクID'].astype(str)
 
-    # 4-2. タスク名列・サブタスク名列を結合し、新しい列「名前」列を作成する
+    # 5-2. タスク名列・サブタスク名列を結合し、新しい列「名前」列を作成する
     # ※ 結合ルール : タスク名 + " / " + サブタスク名
     df['名前'] = df['タスク名'].astype(str) + " / " + df['サブタスク名'].astype(str)
-    # 4-3. タスクID列・サブタスクID列・タスク名列・サブタスク名列を削除する
+    # 5-3. タスクID列・サブタスクID列・タスク名列・サブタスク名列を削除する
     df = df.drop(columns=['タスクID', 'サブタスクID', 'タスク名', 'サブタスク名'])
 
-    # 5. ID列が同じ行をグループ化し、時間列を合計する
+    # 6. ID列が同じ行をグループ化し、時間列を合計する
     # ※ 時間列のみ集計し、他の列は最初の行の値を使用する
     df_sum = df.groupby('ID', as_index=False).agg({
         '名前': 'first',
@@ -42,7 +45,7 @@ def sum_df_each_subtask(csv_filepath: str) -> pd.DataFrame:
         'オーダ略称': 'first',
         'プロジェクト略称': 'first',
     })
-    # 6. 「プロジェクト略称」列の列名を「PJ略」に変更する
+    # 7. 「プロジェクト略称」列の列名を「PJ略」に変更する
     df_sum = df_sum.rename(columns={'プロジェクト略称': 'PJ略'})
 
     return df_sum

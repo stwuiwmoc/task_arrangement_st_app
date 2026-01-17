@@ -41,14 +41,23 @@ def task_sidebar():
         pj_abbr = order_info.get_project_abbr(task.order_number)
         order_abbr = order_info.get_order_abbr(task.order_number)
 
+        col_waitingdate, col_newSubID = st.sidebar.columns([1, 1])
+        # 待機日表示
+        col_waitingdate.write(f"待機日: {task.waiting_date if task.waiting_date else 'None'}")
+
+        # 最大サブID+1を表示
+        if not task.sub_tasks.empty:
+            max_subtask_id = max(int(sid[1:]) for sid in task.sub_tasks["subtask_id"].tolist())
+        else:
+            max_subtask_id = 0
+        new_subtask_id = f"#{max_subtask_id+1:03d}"
+        col_newSubID.write(f"追加用サブID: {new_subtask_id}")
+
         # オーダ情報表示
         col11, col12, col13 = st.sidebar.columns([2, 1, 1])
         col11.write(f"{task.order_number}")
         col12.write(f"{pj_abbr}")
         col13.write(f"{order_abbr}")
-
-        # 待機日表示
-        st.sidebar.write(f"待機日: {task.waiting_date if task.waiting_date else 'None'}")
 
         # サブタスク一覧表示
         subtask_dicts = []
@@ -154,12 +163,6 @@ def task_sidebar():
 
         # --- サブタスク追加機能 ---
 
-        # 最大サブID+1を自動設定
-        if not task.sub_tasks.empty:
-            max_subtask_id = max(int(sid[1:]) for sid in task.sub_tasks["subtask_id"].tolist())
-        else:
-            max_subtask_id = 0
-        new_subtask_id = f"#{max_subtask_id+1:03d}"
         st.sidebar.markdown(f"#### サブタスク追加（追加されるサブID：{new_subtask_id}）")
 
         add_col1, add_col2, add_col3 = st.sidebar.columns([3, 1, 1])
