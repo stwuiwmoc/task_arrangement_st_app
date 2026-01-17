@@ -100,29 +100,7 @@ if __name__ == "__main__":
 
     if mode == "過去分表示":
         # 選択日付のWill-doリストcsv表示
-
-        # 日付選択（2カラム構成：左に説明、右に日付選択）
-        col_left, col_right = st.columns([2, 3])
-        with col_left:
-            st.markdown("#### Will-doリスト日付選択")
-        with col_right:
-            selected_date = st.date_input(
-                "日付を選択してください",
-                value=Output_B.get_without_today_latest_WillDO_date(),
-                key="willdo_date_input",
-                label_visibility="collapsed"
-            )
-        selected_str = selected_date.strftime("%y%m%d")
-
-        willdo_dir = os.path.join("data", "WillDo")
-        willdo_file = os.path.join(willdo_dir, f"WillDo{selected_str}.csv")
-
-        if os.path.exists(willdo_file):
-            df_past = pd.read_csv(willdo_file, encoding="utf-8-sig")
-            # 過去分の場合は表示のみ
-            WillDo_display_settings(df_past, use_filter=True)
-        else:
-            st.info("Will-doリスト未作成です")
+        pass
 
     else:
         # 本日分のWill-doリストcsv表示
