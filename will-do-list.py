@@ -215,14 +215,17 @@ if __name__ == "__main__":
                             f"{task_achievement_minutes}分  \n記録",
                             key="willdo_timer3_btn", use_container_width=True)
                         if record_button:
-                            Output_C.record_completed_task_WorkLog(
-                                willdo_date=selected_str,
-                                achievement_minutes=int(task_achievement_minutes),
-                                wraptime_minutes=int(task_wraptime_minutes),
-                                task_id=now_row["タスクID"],
-                                subtask_id=now_row["サブID"]
-                            )
-                            st.success("記録しました")
+                            if (task_achievement_minutes is not None) and (task_wraptime_minutes is not None):
+                                Output_C.record_completed_task_WorkLog(
+                                    willdo_date=selected_str,
+                                    achievement_minutes=int(task_achievement_minutes),
+                                    wraptime_minutes=int(task_wraptime_minutes),
+                                    task_id=now_row["タスクID"],
+                                    subtask_id=now_row["サブID"]
+                                )
+                                st.success("記録しました")
+                            else:
+                                st.warning("分数を両方入力してください")
 
             else:
                 st.warning("「今」が複数行選択されています")
@@ -279,7 +282,7 @@ if __name__ == "__main__":
                         key="willdo_add_meeting_minute_btn", use_container_width=True
                     )
                     if meeting_record_btn:
-                        if meeting_name_input and meeting_minutes and wraptime_minutes:
+                        if meeting_name_input and (meeting_minutes is not None) and (wraptime_minutes is not None):
                             Output_C.record_completed_meeting_WorkLog(
                                 willdo_date=selected_str,
                                 achievement_minutes=int(meeting_minutes),
