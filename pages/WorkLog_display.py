@@ -40,21 +40,21 @@ if __name__ == "__main__":
         summary_df = Output_E.calc_WorkLog_summary(WorkLog_filepath, df_sum_order_withMTG, add_daytime_break)
 
         # 表示
-        st.data_editor(summary_df, use_container_width=True, hide_index=True)
+        st.data_editor(summary_df, width="stretch", hide_index=True)
         fig = Output_E.make_WorkLog_barchart(WorkLog_filepath)
         if fig is not None:
             st.pyplot(fig)
         st.markdown("工数実績csv生データ")
         st.data_editor(
             pd.read_csv(WorkLog_filepath, parse_dates=['開始時刻', '終了時刻']),
-            use_container_width=True)
+            width="stretch")
 
         st.markdown("#### BJP登録用出力")
         st.table(Output_E.convert_df_for_display(df_sum_order_withMTG))
 
         st.markdown("#### サブタスク別集計")
         st.data_editor(
-            df_sum_subtask_withMTG, use_container_width=True)
+            df_sum_subtask_withMTG, width="stretch")
 
         st.markdown("#### 朝会報告用（MTG除外）")
         st.table(Output_E.convert_df_for_display(df_sum_order_withoutMTG))
@@ -68,7 +68,7 @@ if __name__ == "__main__":
             df_past = pd.read_csv(willdo_file, encoding="utf-8-sig")
             st.data_editor(
                 df_past,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
         else:
