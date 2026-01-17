@@ -187,8 +187,13 @@ def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
     fig, axes = plt.subplots(3, 1, figsize=(15, 2), sharex=False)
 
     # fig全体で色を一意に割り当てる
+    # 黄金比を使って色相を分散させ、隣接する行でも色が区別しやすいようにする
     all_indices = df.index.tolist()
-    cmap = plt.cm.get_cmap('Set1', max(1, len(all_indices)))
+    golden_ratio = 0.618033988749895
+    index_to_color = {}
+    for i, idx in enumerate(all_indices):
+        hue = (i * golden_ratio) % 1.0
+        index_to_color[idx] = plt.cm.hsv(hue)
 
     def _draw_timeband(ax, df_band, start_time, end_time, hour_range):
         barh_data = []
@@ -197,8 +202,8 @@ def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
             start = mdates.date2num(row['開始時刻'])
             duration = (row['終了時刻'] - row['開始時刻']).total_seconds() / 86400
             barh_data.append((start, duration))
-            # 全体dfのindexを使って色を割り当て
-            color_list.append(cmap(row.name))
+            # 全体dfのindexを使って色を割り当て（黄金比で分散）
+            color_list.append(index_to_color[row.name])
         if barh_data:
             ax.broken_barh(barh_data, (0.7, 0.4), facecolors=color_list)
         ax.set_yticks([])
