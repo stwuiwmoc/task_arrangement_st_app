@@ -115,7 +115,6 @@ if __name__ == "__main__":
             st.write("「今」が選択されていません")
         elif now_count == 1:
             now_row = edited_df[edited_df["状態"] == "今"].iloc[0]
-            st.write(f"**選択中：{now_row['タスクID']} {now_row['サブID']}「{now_row['タスク名']}」の「{now_row['サブ名']}」**")
             radio_minutes = [15, 8, now_row["見込み"], math.ceil(now_row["残時間/日"])]
 
             col_timer1, col_timer2, col_record_task = st.columns([8, 2, 8], border=True)
