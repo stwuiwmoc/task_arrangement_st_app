@@ -3,34 +3,40 @@ import os
 import sys
 from datetime import datetime, timedelta
 
+import matplotlib
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models.Task_definition as Task_def
 
 
-def sum_df_each_subtask(csv_filepath: str) -> pd.DataFrame:
+def sum_df_each_subtask(csv_filepath: str, include_MTG: bool) -> pd.DataFrame:
 
     # 1. CSVファイルの全ての行・列をdataframeとして読み込む
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
     df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
-    # 2. 終了時刻列と開始時刻列の差分を計算し、時間列（分）を追加する
+    # 2. MTG行のフィルタリング（タスクID列に'MTG'を含むかどうか）
+    if not include_MTG:
+        df = df[~df['タスクID'].astype(str).str.contains('MTG', na=False)]
+    # 3. 終了時刻列と開始時刻列の差分を計算し、時間列（分）を追加する
     df['実時間'] = (df['終了時刻'] - df['開始時刻']).dt.total_seconds() / 60
-    # 3. 終了時刻列と開始時刻列を削除
+    # 4. 終了時刻列と開始時刻列を削除
     df = df.drop(columns=['開始時刻', '終了時刻'])
 
-    # 4. 列結合と削除
-    # 4-1. タスクID列・サブタスクID列を結合し、新しい列「ID」列を作成する
+    # 5. 列結合と削除
+    # 5-1. タスクID列・サブタスクID列を結合し、新しい列「ID」列を作成する
     # ※ 結合ルール : タスクID + サブタスクID
     df['ID'] = df['タスクID'].astype(str) + df['サブタスクID'].astype(str)
 
-    # 4-2. タスク名列・サブタスク名列を結合し、新しい列「名前」列を作成する
+    # 5-2. タスク名列・サブタスク名列を結合し、新しい列「名前」列を作成する
     # ※ 結合ルール : タスク名 + " / " + サブタスク名
     df['名前'] = df['タスク名'].astype(str) + " / " + df['サブタスク名'].astype(str)
-    # 4-3. タスクID列・サブタスクID列・タスク名列・サブタスク名列を削除する
+    # 5-3. タスクID列・サブタスクID列・タスク名列・サブタスク名列を削除する
     df = df.drop(columns=['タスクID', 'サブタスクID', 'タスク名', 'サブタスク名'])
 
-    # 5. ID列が同じ行をグループ化し、時間列を合計する
+    # 6. ID列が同じ行をグループ化し、時間列を合計する
     # ※ 時間列のみ集計し、他の列は最初の行の値を使用する
     df_sum = df.groupby('ID', as_index=False).agg({
         '名前': 'first',
@@ -39,7 +45,7 @@ def sum_df_each_subtask(csv_filepath: str) -> pd.DataFrame:
         'オーダ略称': 'first',
         'プロジェクト略称': 'first',
     })
-    # 6. 「プロジェクト略称」列の列名を「PJ略」に変更する
+    # 7. 「プロジェクト略称」列の列名を「PJ略」に変更する
     df_sum = df_sum.rename(columns={'プロジェクト略称': 'PJ略'})
 
     return df_sum
@@ -141,6 +147,92 @@ def calc_WorkLog_summary(csv_filepath: str, df_truncated: pd.DataFrame, add_dayt
     df_output = pd.DataFrame([output_dict])
 
     return df_output
+
+
+def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
+    """
+    工数実績CSVファイルから、1日を3つの時間帯（5:00～13:00、13:00～21:00、21:00～翌5:00）に分割した横棒グラフ（ガントチャート風）を作成して返す。
+
+    各CSV行ごとに色分けし、各時間帯ごとにサブプロットとして表示。
+    棒の縦幅は細め（0.4）で、x軸は1時間ごとに実線、15分ごとに点線グリッド。
+
+    Args:
+        csv_filepath (str): 工数実績CSVファイルのパス。
+
+    Returns:
+        matplotlib.figure.Figure: 作成した3分割ガントチャートのFigureオブジェクト。
+    """
+    # 1. CSVファイルの全ての行・列をdataframeとして読み込む
+    # ※開始時刻列、終了時刻列はdatetime型として読み込む
+
+    df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
+
+    # 2. 全タスクを1本の横棒（同じy位置）にbroken_barhで描画
+    df['タスク表示名'] = df['タスク名'].astype(str) + ' / ' + df['サブタスク名'].astype(str)
+
+    # 5時～13時、13時～21時、21時～翌5時の3分割
+    def _get_time_range3(dt):
+        t = dt.time()
+        if t >= datetime.strptime('05:00', '%H:%M').time() and t < datetime.strptime('13:00', '%H:%M').time():
+            return 'morning'
+        elif t >= datetime.strptime('13:00', '%H:%M').time() and t < datetime.strptime('21:00', '%H:%M').time():
+            return 'afternoon'
+        else:
+            return 'night'
+
+    df['時間帯'] = df['開始時刻'].apply(_get_time_range3)
+    df_morning = df[df['時間帯'] == 'morning']
+    df_afternoon = df[df['時間帯'] == 'afternoon']
+    df_night = df[df['時間帯'] == 'night']
+
+    fig, axes = plt.subplots(3, 1, figsize=(15, 2), sharex=False)
+
+    # fig全体で色を一意に割り当てる
+    all_indices = df.index.tolist()
+    cmap = plt.cm.get_cmap('Set1', max(1, len(all_indices)))
+
+    def _draw_timeband(ax, df_band, start_time, end_time, hour_range):
+        barh_data = []
+        color_list = []
+        for _, row in df_band.iterrows():
+            start = mdates.date2num(row['開始時刻'])
+            duration = (row['終了時刻'] - row['開始時刻']).total_seconds() / 86400
+            barh_data.append((start, duration))
+            # 全体dfのindexを使って色を割り当て
+            color_list.append(cmap(row.name))
+        if barh_data:
+            ax.broken_barh(barh_data, (0.7, 0.4), facecolors=color_list)
+        ax.set_yticks([])
+        ax.set_yticklabels([])
+        if hour_range is not None:
+            ax.xaxis.set_major_locator(mdates.HourLocator(byhour=hour_range, interval=1))
+        else:
+            ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        ax.xaxis.grid(True, which='major', linestyle='solid', color='gray', linewidth=1)
+        ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=[0,15,30,45]))
+        ax.xaxis.grid(True, which='minor', linestyle='dotted', color='gray', linewidth=0.8)
+        ax.set_xlim(mdates.date2num(start_time), mdates.date2num(end_time))
+
+    # 5:00～13:00
+    morning_start = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('05:00', '%H:%M').time())
+    morning_end = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('13:00', '%H:%M').time())
+    _draw_timeband(axes[0], df_morning, morning_start, morning_end, range(5,14))
+
+    # 13:00～21:00
+    afternoon_start = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('13:00', '%H:%M').time())
+    afternoon_end = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('21:00', '%H:%M').time())
+    _draw_timeband(axes[1], df_afternoon, afternoon_start, afternoon_end, range(13,22))
+
+    # 21:00～翌5:00
+    night_start = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('21:00', '%H:%M').time())
+    next_day = df['開始時刻'].min().date() + timedelta(days=1)
+    night_end = datetime.combine(next_day, datetime.strptime('05:00', '%H:%M').time())
+    _draw_timeband(axes[2], df_night, night_start, night_end, None)
+
+    fig.tight_layout()
+    return fig
+
 
 
 def _format_minutes_to_hours_minutes(minutes: int) -> str:
