@@ -195,7 +195,7 @@ def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
         hue = (i * golden_ratio) % 1.0
         index_to_color[idx] = plt.cm.hsv(hue)
 
-    def _draw_timeband(ax, df_band, start_time, end_time, hour_range):
+    def _draw_timeband(ax, df_band, start_time, end_time):
         barh_data = []
         color_list = []
         for _, row in df_band.iterrows():
@@ -218,18 +218,18 @@ def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
     # 5:00～13:00
     morning_start = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('05:00', '%H:%M').time())
     morning_end = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('13:00', '%H:%M').time())
-    _draw_timeband(axes[0], df_morning, morning_start, morning_end, range(5,14))
+    _draw_timeband(axes[0], df_morning, morning_start, morning_end)
 
     # 13:00～21:00
     afternoon_start = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('13:00', '%H:%M').time())
     afternoon_end = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('21:00', '%H:%M').time())
-    _draw_timeband(axes[1], df_afternoon, afternoon_start, afternoon_end, range(13,22))
+    _draw_timeband(axes[1], df_afternoon, afternoon_start, afternoon_end)
 
     # 21:00～翌5:00
     night_start = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('21:00', '%H:%M').time())
     next_day = df['開始時刻'].min().date() + timedelta(days=1)
     night_end = datetime.combine(next_day, datetime.strptime('05:00', '%H:%M').time())
-    _draw_timeband(axes[2], df_night, night_start, night_end, None)
+    _draw_timeband(axes[2], df_night, night_start, night_end)
 
     fig.tight_layout()
     return fig
