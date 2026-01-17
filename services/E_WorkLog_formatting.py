@@ -154,7 +154,6 @@ def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
     工数実績CSVファイルから、1日を3つの時間帯（5:00～13:00、13:00～21:00、21:00～翌5:00）に分割した横棒グラフ（ガントチャート風）を作成して返す。
 
     各CSV行ごとに色分けし、各時間帯ごとにサブプロットとして表示。
-    棒の縦幅は細め（0.4）で、x軸は1時間ごとに実線、15分ごとに点線グリッド。
 
     Args:
         csv_filepath (str): 工数実績CSVファイルのパス。
@@ -188,47 +187,49 @@ def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
     fig, axes = plt.subplots(3, 1, figsize=(15, 2), sharex=False)
 
     # fig全体で色を一意に割り当てる
+    # 黄金比を使って色相を分散させ、隣接する行でも色が区別しやすいようにする
     all_indices = df.index.tolist()
-    cmap = plt.cm.get_cmap('Set1', max(1, len(all_indices)))
+    golden_ratio = 0.618033988749895
+    index_to_color = {}
+    for i, idx in enumerate(all_indices):
+        hue = (i * golden_ratio) % 1.0
+        index_to_color[idx] = plt.cm.hsv(hue)
 
-    def _draw_timeband(ax, df_band, start_time, end_time, hour_range):
+    def _draw_timeband(ax, df_band, start_time, end_time):
         barh_data = []
         color_list = []
         for _, row in df_band.iterrows():
             start = mdates.date2num(row['開始時刻'])
             duration = (row['終了時刻'] - row['開始時刻']).total_seconds() / 86400
             barh_data.append((start, duration))
-            # 全体dfのindexを使って色を割り当て
-            color_list.append(cmap(row.name))
+            # 全体dfのindexを使って色を割り当て（黄金比で分散）
+            color_list.append(index_to_color[row.name])
         if barh_data:
             ax.broken_barh(barh_data, (0.7, 0.4), facecolors=color_list)
         ax.set_yticks([])
         ax.set_yticklabels([])
-        if hour_range is not None:
-            ax.xaxis.set_major_locator(mdates.HourLocator(byhour=hour_range, interval=1))
-        else:
-            ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+        ax.xaxis.set_major_locator(mdates.MinuteLocator(byminute=[0, 30], interval=1))
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        ax.xaxis.grid(True, which='major', linestyle='solid', color='gray', linewidth=1)
-        ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=[0,15,30,45]))
+        ax.xaxis.grid(True, which='major', linestyle='solid', color='black', linewidth=1)
+        ax.xaxis.set_minor_locator(mdates.MinuteLocator(interval=10))
         ax.xaxis.grid(True, which='minor', linestyle='dotted', color='gray', linewidth=0.8)
         ax.set_xlim(mdates.date2num(start_time), mdates.date2num(end_time))
 
     # 5:00～13:00
     morning_start = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('05:00', '%H:%M').time())
     morning_end = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('13:00', '%H:%M').time())
-    _draw_timeband(axes[0], df_morning, morning_start, morning_end, range(5,14))
+    _draw_timeband(axes[0], df_morning, morning_start, morning_end)
 
     # 13:00～21:00
     afternoon_start = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('13:00', '%H:%M').time())
     afternoon_end = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('21:00', '%H:%M').time())
-    _draw_timeband(axes[1], df_afternoon, afternoon_start, afternoon_end, range(13,22))
+    _draw_timeband(axes[1], df_afternoon, afternoon_start, afternoon_end)
 
     # 21:00～翌5:00
     night_start = datetime.combine(df['開始時刻'].min().date(), datetime.strptime('21:00', '%H:%M').time())
     next_day = df['開始時刻'].min().date() + timedelta(days=1)
     night_end = datetime.combine(next_day, datetime.strptime('05:00', '%H:%M').time())
-    _draw_timeband(axes[2], df_night, night_start, night_end, None)
+    _draw_timeband(axes[2], df_night, night_start, night_end)
 
     fig.tight_layout()
     return fig
