@@ -154,7 +154,6 @@ def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
     工数実績CSVファイルから、1日を3つの時間帯（5:00～13:00、13:00～21:00、21:00～翌5:00）に分割した横棒グラフ（ガントチャート風）を作成して返す。
 
     各CSV行ごとに色分けし、各時間帯ごとにサブプロットとして表示。
-    棒の縦幅は細め（0.4）で、x軸は1時間ごとに実線、15分ごとに点線グリッド。
 
     Args:
         csv_filepath (str): 工数実績CSVファイルのパス。
@@ -204,13 +203,10 @@ def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
             ax.broken_barh(barh_data, (0.7, 0.4), facecolors=color_list)
         ax.set_yticks([])
         ax.set_yticklabels([])
-        if hour_range is not None:
-            ax.xaxis.set_major_locator(mdates.HourLocator(byhour=hour_range, interval=1))
-        else:
-            ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+        ax.xaxis.set_major_locator(mdates.MinuteLocator(byminute=[0, 30], interval=1))
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        ax.xaxis.grid(True, which='major', linestyle='solid', color='gray', linewidth=1)
-        ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=[0,15,30,45]))
+        ax.xaxis.grid(True, which='major', linestyle='solid', color='black', linewidth=1)
+        ax.xaxis.set_minor_locator(mdates.MinuteLocator(interval=10))
         ax.xaxis.grid(True, which='minor', linestyle='dotted', color='gray', linewidth=0.8)
         ax.set_xlim(mdates.date2num(start_time), mdates.date2num(end_time))
 
