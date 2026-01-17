@@ -59,5 +59,21 @@ if __name__ == "__main__":
         st.markdown("#### 朝会報告用（MTG除外）")
         st.table(Output_E.convert_df_for_display(df_sum_order_withoutMTG))
 
+        st.markdown("#### Will-doリスト実績表示")
+
+        willdo_dir = os.path.join("data", "WillDo")
+        willdo_file = os.path.join(willdo_dir, f"WillDo{selected_str}.csv")
+
+        if os.path.exists(willdo_file):
+            df_past = pd.read_csv(willdo_file, encoding="utf-8-sig")
+            st.data_editor(
+                df_past,
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.info("Will-doリスト未作成です")
+
+
     else:
         st.info("工数実績csv未作成です")
