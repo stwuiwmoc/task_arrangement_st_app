@@ -80,8 +80,7 @@ def WillDo_display_settings(
         fit_columns_on_grid_load=False,
         enable_enterprise_modules=False,
         allow_unsafe_jscode=True,
-        width="stretch",
-        editable=True,
+        update_on=["cellValueChanged"],  # セル編集時にデータを返す
     )
     return aggrid_ret
 
@@ -102,6 +101,75 @@ def sanitize_halfwidth_digit(val: str) -> str | None:
     return None
 
 
+def get_edited_dataframe(aggrid_ret, df_original: pd.DataFrame) -> pd.DataFrame:
+    """AgGridの返却値から編集後のDataFrameを取得する（streamlit-aggrid v1.x対応）
+
+    Args:
+        aggrid_ret: AgGridの返却値
+        df_original: 元のDataFrame
+
+    Returns:
+        pd.DataFrame: 編集後のDataFrame（元のDataFrameと同じ列のみ）
+    """
+    # 内部列を除いた元の列リスト
+    original_cols = [c for c in df_original.columns if not c.startswith("::")]
+
+    # v1.x系: 属性として .data でアクセス
+    if hasattr(aggrid_ret, 'data') and aggrid_ret.data is not None:
+        edited_df = aggrid_ret.data.copy()
+        # 内部列を除去
+        cols_to_keep = [c for c in edited_df.columns if not c.startswith("::")]
+        edited_df = edited_df[cols_to_keep]
+        # 列順を元のDataFrameに合わせる（共通の列のみ）
+        common_cols = [c for c in original_cols if c in edited_df.columns]
+        edited_df = edited_df[common_cols]
+        return edited_df
+    # 旧バージョン互換: 辞書形式でアクセス
+    if isinstance(aggrid_ret, dict) and "data" in aggrid_ret:
+        return aggrid_ret["data"]
+    return df_original
+
+
+def load_willdo_csv(filepath: str) -> pd.DataFrame:
+    """WillDoリストのCSVを読み込み、内部列を除去して返す
+
+    Args:
+        filepath: CSVファイルのパス
+
+    Returns:
+        pd.DataFrame: 内部列を除去したDataFrame
+    """
+    df = pd.read_csv(filepath, encoding="utf-8-sig")
+    # 内部列（::auto_unique_id::など）を除去
+    internal_cols = [c for c in df.columns if c.startswith("::")]
+    if internal_cols:
+        df = df.drop(columns=internal_cols)
+        # CSVファイルから内部列を除去した状態で上書き保存
+        df.to_csv(filepath, index=False, encoding="utf-8-sig")
+    return df
+
+
+def has_dataframe_changed(edited_df: pd.DataFrame, original_df: pd.DataFrame) -> bool:
+    """2つのDataFrameに差分があるか判定（型の違いを吸収）
+
+    Args:
+        edited_df: 編集後のDataFrame
+        original_df: 元のDataFrame
+
+    Returns:
+        bool: 差分がある場合True
+    """
+    if edited_df.shape != original_df.shape:
+        return True
+    if list(edited_df.columns) != list(original_df.columns):
+        return True
+    # 値を文字列化して比較（型の違いを吸収）
+    for col in edited_df.columns:
+        if not edited_df[col].astype(str).equals(original_df[col].astype(str)):
+            return True
+    return False
+
+
 if __name__ == "__main__":
     st.set_page_config(layout="wide")
 
@@ -114,14 +182,16 @@ if __name__ == "__main__":
     willdo_dir = os.path.join("data", "WillDo")
     willdo_file = os.path.join(willdo_dir, f"WillDo{selected_str}.csv")
     if os.path.exists(willdo_file):
-        df_today = pd.read_csv(willdo_file, encoding="utf-8-sig")
+        df_today = load_willdo_csv(willdo_file)
+        # 比較用に元のDataFrameをコピー（AgGridが元のdfを変更するため）
+        df_original = df_today.copy()
 
         # テーブル表示の詳細設定
         aggrid_ret = WillDo_display_settings(df_today, use_filter=False)
 
-        # 差分があれば自動保存
-        edited_df = aggrid_ret["data"] if "data" in aggrid_ret else df_today
-        if not edited_df.equals(df_today):
+        # 差分があれば自動保存（streamlit-aggrid v1.x対応）
+        edited_df = get_edited_dataframe(aggrid_ret, df_original)
+        if has_dataframe_changed(edited_df, df_original):
             edited_df.to_csv(willdo_file, index=False, encoding="utf-8-sig")
 
         # タイマー処理
