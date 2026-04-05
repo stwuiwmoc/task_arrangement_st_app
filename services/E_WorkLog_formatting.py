@@ -26,6 +26,9 @@ def extract_rest_time_from_WorkLog(
     # 1. 工数実績CSVファイルの全ての行・列をdataframeとして読み込む
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
     df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
+    # 秒数を切り捨てて分単位に統一
+    df['開始時刻'] = df['開始時刻'].dt.floor('min')
+    df['終了時刻'] = df['終了時刻'].dt.floor('min')
 
     # 2. 休憩時間のみのdfを新規作成
     rest_records = []
@@ -87,6 +90,9 @@ def sum_df_each_subtask(csv_filepath: str, include_MTG: bool) -> pd.DataFrame:
     # 1. CSVファイルの全ての行・列をdataframeとして読み込む
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
     df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
+    # 秒数を切り捨てて分単位に統一
+    df['開始時刻'] = df['開始時刻'].dt.floor('min')
+    df['終了時刻'] = df['終了時刻'].dt.floor('min')
     # 2. MTG行のフィルタリング（タスクID列に'MTG'を含むかどうか）
     if not include_MTG:
         df = df[~df['タスクID'].astype(str).str.contains('MTG', na=False)]
@@ -182,6 +188,9 @@ def calc_WorkLog_summary(csv_filepath: str, df_truncated: pd.DataFrame, add_dayt
     # 1. CSVファイルの全ての行・列をdataframeとして読み込む
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
     df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
+    # 秒数を切り捨てて分単位に統一
+    df['開始時刻'] = df['開始時刻'].dt.floor('min')
+    df['終了時刻'] = df['終了時刻'].dt.floor('min')
 
     # 2. 開始時刻で最も早い行のdatetimeと、終了時刻で最も遅い行のdatetimeを取得
     earliest_start = df['開始時刻'].min()
@@ -238,6 +247,9 @@ def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
 
     df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
+    # 秒数を切り捨てて分単位に統一
+    df['開始時刻'] = df['開始時刻'].dt.floor('min')
+    df['終了時刻'] = df['終了時刻'].dt.floor('min')
 
     # 2. 全タスクを1本の横棒（同じy位置）にbroken_barhで描画
     df['タスク表示名'] = df['タスク名'].astype(str) + ' / ' + df['サブタスク名'].astype(str)
