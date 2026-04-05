@@ -272,7 +272,7 @@ if __name__ == "__main__":
                 now_row = edited_df[edited_df["状態"] == "今"].iloc[0]
                 incomplete_subtasks_df = get_incomplete_subtasks_df(now_row["タスクID"])
                 if incomplete_subtasks_df is not None:
-                    st.dataframe(incomplete_subtasks_df, hide_index=True, use_container_width=True)
+                    st.dataframe(incomplete_subtasks_df, hide_index=True, width='stretch')
                 else:
                     st.write("タスクCSVが見つかりません")
 
@@ -304,7 +304,7 @@ if __name__ == "__main__":
                             )
                         )
                     with col_timer1_btn:
-                        if st.button(f"{radio_minutes[selected_idx]}分  \n開始", key="willdo_timer1_btn", use_container_width=True):
+                        if st.button(f"{radio_minutes[selected_idx]}分  \n開始", key="willdo_timer1_btn", width='stretch'):
                             Output_C.start_new_timer_and_record_WorkLog(
                                 willdo_date=selected_str,
                                 timer_minutes=int(radio_minutes[selected_idx]),
@@ -315,7 +315,7 @@ if __name__ == "__main__":
 
                 with col_timer2:
                     # 続けて開始ボタン
-                    if st.button(f"続けて  \n開始", key="willdo_timer2_btn", type="tertiary", use_container_width=True):
+                    if st.button(f"続けて  \n開始", key="willdo_timer2_btn", type="tertiary", width='stretch'):
 
                         # 続けて開始ボタンを使えるのは、直前サブタスクの終了時刻がまだ来てない場合のみ
                         if datetime.now() < Output_C.check_WorkLog_latest_end_datetime(selected_str):
@@ -344,7 +344,7 @@ if __name__ == "__main__":
                     with col_record_task_btn:
                         record_button = st.button(
                             f"{task_achievement_minutes}分  \n記録",
-                            key="willdo_timer3_btn", use_container_width=True)
+                            key="willdo_timer3_btn", width='stretch')
                         if record_button:
                             if (task_achievement_minutes is not None) and (task_wraptime_minutes is not None):
                                 # 新タスクの開始時刻を事前計算して時系列整合性チェック
@@ -419,7 +419,7 @@ if __name__ == "__main__":
                 with col_record_meeting_btn:
                     meeting_record_btn = st.button(
                         f"{meeting_minutes}分記録",
-                        key="willdo_add_meeting_minute_btn", use_container_width=True
+                        key="willdo_add_meeting_minute_btn", width='stretch'
                     )
                     if meeting_record_btn:
                         if meeting_name_input and (meeting_minutes is not None) and (wraptime_minutes is not None):
@@ -472,7 +472,7 @@ if __name__ == "__main__":
                 # 追加ボタン押下でWillDoにタスク追加
                 add_btn = st.button(
                     f"{task_id_input} / {subtask_id_input} を追加",
-                    key="willdo_add_btn", use_container_width=True)
+                    key="willdo_add_btn", width='stretch')
                 if add_btn:
                     if task_id_input and subtask_id_input:
                         Output_B.add_WillDo_Task_with_ID(task_id_input, subtask_id_input)
