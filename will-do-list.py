@@ -186,6 +186,52 @@ def has_dataframe_changed(edited_df: pd.DataFrame, original_df: pd.DataFrame) ->
     return False
 
 
+def find_task_csv_path(task_id: str) -> str | None:
+    """タスクIDに対応するCSVファイルのパスをDaily/Active・Project/Activeから検索して返す。
+
+    Args:
+        task_id (str): 検索するタスクID
+
+    Returns:
+        str | None: 見つかったCSVファイルのパス。見つからない場合はNone。
+    """
+    search_dirs = [
+        os.path.join("data", "Daily", "Active"),
+        os.path.join("data", "Project", "Active"),
+    ]
+    for d in search_dirs:
+        candidate = os.path.join(d, f"{task_id}.csv")
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+def get_incomplete_subtasks_df(task_id: str) -> pd.DataFrame | None:
+    """タスクIDに属する未完了サブタスクをsort_index昇順で取得して返す。
+
+    Args:
+        task_id (str): 対象のタスクID
+
+    Returns:
+        pd.DataFrame | None: 未完了サブタスクのDataFrame（順序・サブID・サブタスク名・見込(分)列）。
+                             CSVが見つからない場合はNone。
+    """
+    task_csv_path = find_task_csv_path(task_id)
+    if task_csv_path is None:
+        return None
+    task_now = Task_def.read_task_csv(task_csv_path)
+    incomplete_df = (
+        task_now.sub_tasks[task_now.sub_tasks["is_incomplete"] == True]
+        .sort_values("sort_index")
+        .reset_index(drop=True)
+    )
+    return incomplete_df[["subtask_id", "estimated_time", "name"]].rename(columns={
+        "subtask_id": "サブID",
+        "estimated_time": "見込",
+        "name": "サブタスク名",
+    })
+
+
 if __name__ == "__main__":
     st.set_page_config(layout="wide")
 
@@ -213,16 +259,25 @@ if __name__ == "__main__":
         if has_dataframe_changed(edited_df, df_original):
             edited_df.to_csv(willdo_file, index=False, encoding="utf-8-sig")
 
-        # 状態列が"今"の行数を取得し、行数に応じた処理
+        # 状態列が"今"の行数を取得し、行数に応じた処理をするための準備
         now_count = edited_df[edited_df["状態"] == "今"].shape[0]
 
         col_following_subtasks, col_functions = st.columns([2, 5])
 
         with col_following_subtasks:
-            st.write("hoge")
+            # 「今」のタスクIDに属する未完了サブタスクを表示
+            if now_count == 0:
+                st.write("「今」が選択されていません")
+            elif now_count == 1:
+                now_row = edited_df[edited_df["状態"] == "今"].iloc[0]
+                incomplete_subtasks_df = get_incomplete_subtasks_df(now_row["タスクID"])
+                if incomplete_subtasks_df is not None:
+                    st.dataframe(incomplete_subtasks_df, hide_index=True, use_container_width=True)
+                else:
+                    st.write("タスクCSVが見つかりません")
 
         with col_functions:
-            # タイマー処理
+            # タイマー処理と実績記録処理とタスク追加処理を表示
             if now_count == 0:
                 st.write("「今」が選択されていません")
             elif now_count == 1:
