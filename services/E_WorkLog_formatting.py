@@ -42,9 +42,9 @@ def extract_rest_time_from_WorkLog(
         # 工数実績csvのある行の終了時刻と次の行の開始時刻が異なる場合、その差分を休憩時間として抽出
         rest_minutes = (next_start - current_end).total_seconds() / 60
 
-        # 推奨の休憩記録は5分以上の場合のみ追加
-        if rest_minutes < 5:
-            # 休憩時間が5分未満の場合、実績のみ記録
+        # 推奨の休憩記録は指定した分数以上の場合のみ追加
+        if rest_minutes < 4:
+            # 休憩時間が指定の分数未満の場合、実績のみ記録
             rest_records.append({
                 '休憩(推奨)': None,
                 '休憩開始(推奨)': None,
@@ -53,7 +53,7 @@ def extract_rest_time_from_WorkLog(
                 '休憩開始(実績)': current_end.strftime("%H:%M"),
                 '休憩終了(実績)': next_start.strftime("%H:%M"),
             })
-            # 5分未満の休憩時間はスキップし、スキップされた休憩時間を蓄積
+            # 指定の分数未満の休憩時間はスキップし、スキップされた休憩時間を蓄積
             skipped_rest_minutes += rest_minutes
 
         else:
