@@ -12,6 +12,76 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models.Task_definition as Task_def
 
 
+def extract_rest_time_from_WorkLog(
+        csv_filepath: str) -> pd.DataFrame:
+    """
+    工数実績CSVファイルから休憩時間を抽出し、登録用の休憩時間推奨値を計算する。
+
+    Args:
+        csv_filepath (str): 工数実績CSVファイルのパス
+
+    Returns:
+        pd.DataFrame: 休憩時間のDataFrame
+    """
+    # 1. 工数実績CSVファイルの全ての行・列をdataframeとして読み込む
+    # ※開始時刻列、終了時刻列はdatetime型として読み込む
+    df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
+
+    # 2. 休憩時間のみのdfを新規作成
+    rest_records = []
+    skipped_rest_minutes = 0
+    for i in range(len(df) - 1):
+        current_end = df.iloc[i]['終了時刻']
+        next_start = df.iloc[i + 1]['開始時刻']
+        # 工数実績csvのある行の終了時刻と次の行の開始時刻が同じ場合は、スキップ
+        if current_end == next_start:
+            continue
+        # 工数実績csvのある行の終了時刻と次の行の開始時刻が異なる場合、その差分を休憩時間として抽出
+        rest_minutes = (next_start - current_end).total_seconds() / 60
+
+        # 推奨の休憩記録は5分以上の場合のみ追加
+        if rest_minutes < 5:
+            # 休憩時間が5分未満の場合、実績のみ記録
+            rest_records.append({
+                '休憩(推奨)': None,
+                '休憩開始(推奨)': None,
+                '休憩終了(推奨)': None,
+                '休憩(実績)': int(rest_minutes),
+                '休憩開始(実績)': current_end.strftime("%H:%M"),
+                '休憩終了(実績)': next_start.strftime("%H:%M"),
+            })
+            # 5分未満の休憩時間はスキップし、スキップされた休憩時間を蓄積
+            skipped_rest_minutes += rest_minutes
+
+        else:
+            # スキップされた休憩時間がある場合、その中から1分を休憩開始時刻に移動
+            if skipped_rest_minutes >= 1:
+                skipped_rest_minutes -= 1
+                current_end_adjusted = current_end - timedelta(minutes=1)
+            else:
+                current_end_adjusted = current_end
+            # スキップされた休憩時間がある場合、その中から1分を休憩終了時刻に移動
+            if skipped_rest_minutes >= 1:
+                skipped_rest_minutes -= 1
+                next_start_adjusted = next_start + timedelta(minutes=1)
+            else:
+                next_start_adjusted = next_start
+
+            rest_minutes_adjusted = (next_start_adjusted - current_end_adjusted).total_seconds() / 60
+
+            rest_records.append({
+                '休憩(推奨)': int(rest_minutes_adjusted),
+                '休憩開始(推奨)': current_end_adjusted.strftime("%H:%M"),
+                '休憩終了(推奨)': next_start_adjusted.strftime("%H:%M"),
+                '休憩(実績)': int(rest_minutes),
+                '休憩開始(実績)': current_end.strftime("%H:%M"),
+                '休憩終了(実績)': next_start.strftime("%H:%M"),
+            })
+
+    df_break = pd.DataFrame(rest_records)
+    return df_break
+
+
 def sum_df_each_subtask(csv_filepath: str, include_MTG: bool) -> pd.DataFrame:
 
     # 1. CSVファイルの全ての行・列をdataframeとして読み込む

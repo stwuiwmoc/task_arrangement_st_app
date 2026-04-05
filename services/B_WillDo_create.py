@@ -438,9 +438,9 @@ def ID_to_WillDoEntry(task_id: str, subtask_id: str) -> Task_def.WillDoEntry:
             end_idx = len(filtered_ids) - 1
         target_subtasks_df = filtered_subtasks_df.iloc[:end_idx+1]
 
-        # 5. 4で取得したサブタスク全ての（見込み時間 - 実績時間）を合算
+        # 5. 4で取得したサブタスク全ての（見込み時間）を合算
         estimated_time_sum = (
-            target_subtasks_df["estimated_time"] - target_subtasks_df["actual_time"]
+            target_subtasks_df["estimated_time"]
         ).sum() if not target_subtasks_df.empty else 0
 
         # 今日から〆切日までの日本の祝日を除いた平日日数を取得
@@ -454,8 +454,8 @@ def ID_to_WillDoEntry(task_id: str, subtask_id: str) -> Task_def.WillDoEntry:
             d += timedelta(days=1)
 
         if days_left is not None and days_left <= 1:
-            # 〆切日までの日数が1以下の場合は、合算時間をそのまま一日当たり作業時間目安とする
-            estimated_time_per_day = estimated_time_sum
+            # 〆切日までの日数が1以下の場合は、合算時間の2倍を一日当たり作業時間目安とする
+            estimated_time_per_day = round(estimated_time_sum / 0.5, 0)
         else:
             # そうでない場合は、合算時間を〆切日までの日数で割った値を一日当たり作業時間目安とする
             estimated_time_per_day = round(estimated_time_sum / (days_left - 0.5), 0)
@@ -465,10 +465,10 @@ def ID_to_WillDoEntry(task_id: str, subtask_id: str) -> Task_def.WillDoEntry:
         nearest_deadline = None
         nearest_subtask_id = None
 
-        # 残りのサブタスク全ての（見込み時間 - 実績時間）を合算
-        estimated_time_per_day = (
-            filtered_subtasks_df["estimated_time"] - filtered_subtasks_df["actual_time"]
-        ).sum() if not filtered_subtasks_df.empty else 0
+        # 残りのサブタスク全ての（見込み時間）を合算して2倍を一日当たり作業時間目安とする
+        estimated_time_per_day = round((
+            filtered_subtasks_df["estimated_time"]
+        ).sum() / 0.5, 0) if not filtered_subtasks_df.empty else 0
 
     # WillDoEntryオブジェクトを生成して返す
     return Task_def.WillDoEntry(
