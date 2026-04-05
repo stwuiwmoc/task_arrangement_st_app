@@ -41,7 +41,7 @@ def WillDo_display_settings(
         if col == "状態":
             col_def["cellEditor"] = "agSelectCellEditor"
             col_def["cellEditorParams"] = {
-                "values": ["今", "済","着手", "不要", "後回", ""]
+                "values": ["今", "済", "着手", "不要", "後回", ""]
             }
         # タスクID列なら太字表示
         if col == "タスクID":
@@ -149,6 +149,22 @@ def load_willdo_csv(filepath: str) -> pd.DataFrame:
     return df
 
 
+def sort_willdo_for_display(df: pd.DataFrame) -> pd.DataFrame:
+    """WillDoリストを表示用に並べ替える。
+    「残時間/日」降順でソートし、完了系（済・不要・後回）の行を末尾に移動する。
+
+    Args:
+        df (pd.DataFrame): WillDoリストのDataFrame
+
+    Returns:
+        pd.DataFrame: 並べ替え後のDataFrame
+    """
+    done_statuses = ["済", "不要", "後回"]
+    df_active = df[~df["状態"].isin(done_statuses)].sort_values(by="残時間/日", ascending=False)
+    df_done = df[df["状態"].isin(done_statuses)].sort_values(by="残時間/日", ascending=False)
+    return pd.concat([df_active, df_done], ignore_index=True)
+
+
 def has_dataframe_changed(edited_df: pd.DataFrame, original_df: pd.DataFrame) -> bool:
     """2つのDataFrameに差分があるか判定（型の違いを吸収）
 
@@ -183,6 +199,9 @@ if __name__ == "__main__":
     willdo_file = os.path.join(willdo_dir, f"WillDo{selected_str}.csv")
     if os.path.exists(willdo_file):
         df_today = load_willdo_csv(willdo_file)
+        # 表示用に並べ替え: 残時間/日降順・完了系を末尾へ
+        df_today = sort_willdo_for_display(df_today)
+
         # 比較用に元のDataFrameをコピー（AgGridが元のdfを変更するため）
         df_original = df_today.copy()
 

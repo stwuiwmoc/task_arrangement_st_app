@@ -172,6 +172,9 @@ def convert_df_for_display(
     # 2. 列の並び順を変更
     df_display = df_display[['オーダ番号', '工数', '実時間', '名前']]
 
+    # 3. 工数をkeyにして降順ソート
+    df_display = df_display.sort_values(by='工数', ascending=False)
+
     return df_display
 
 

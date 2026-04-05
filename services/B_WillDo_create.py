@@ -29,6 +29,8 @@ def create_new_WillDo_with_DailyTasks():
     # Will-doリストDataFrameを初期化
     WillDo_df = pd.DataFrame(
         columns=[col.metadata["label"] for col in Task_def.WillDoEntry.__dataclass_fields__.values()])
+    # 「状態」列（status）は全て空でobject型に明示
+    WillDo_df = WillDo_df.astype({"状態": object})
 
     # 作業開始時点で最新のWillDoファイルを特定
     target_date = get_latest_WillDo_datetime()
@@ -104,10 +106,10 @@ def add_WillDo_Task_with_ID(
         for k, v in asdict(WillDo_entry).items()}
     try:
         new_entry_df = pd.DataFrame([entry_dict])
-
-        # 空または全てNAの列を除外して結合
-        new_entry_df = new_entry_df.dropna(how='all', axis=1)
-        WillDo_df = pd.concat([WillDo_df, new_entry_df], ignore_index=True)
+        new_entry_df = new_entry_df.reindex(columns=WillDo_df.columns)
+        # 空のDataFrameを除外してconcatすることでFutureWarningを回避
+        dfs = [df for df in [WillDo_df, new_entry_df] if not df.empty]
+        WillDo_df = pd.concat(dfs, ignore_index=True) if dfs else WillDo_df
 
     except Exception as e:
         raise ValueError(f"Error while processing DataFrame: {e}")
@@ -163,12 +165,11 @@ def add_WillDo_meeting(
 
     try:
         new_entry_df = pd.DataFrame([entry_dict])
+        new_entry_df = new_entry_df.reindex(columns=WillDo_df.columns)
+        # 空のDataFrameを除外してconcatすることでFutureWarningを回避
+        dfs = [df for df in [WillDo_df, new_entry_df] if not df.empty]
+        WillDo_df = pd.concat(dfs, ignore_index=True) if dfs else WillDo_df
 
-        # 空または全てNAの列を除外して結合
-        new_entry_df = new_entry_df.dropna(how='all', axis=1)
-        WillDo_df = pd.concat(
-            [WillDo_df, new_entry_df],
-            ignore_index=True)
     except Exception as e:
         raise ValueError(f"Error while adding entry to WillDo_df: {e}")
 
@@ -511,12 +512,11 @@ def add_WillDo_Tasks(WillDo_df: pd.DataFrame, Tasks_dict: Dict[str, Task_def.Tas
                 for k, v in asdict(will_do_entry).items()}
             try:
                 new_entry_df = pd.DataFrame([entry_dict])
+                new_entry_df = new_entry_df.reindex(columns=WillDo_df.columns)
+                # 空のDataFrameを除外してconcatすることでFutureWarningを回避
+                dfs = [df for df in [WillDo_df, new_entry_df] if not df.empty]
+                WillDo_df = pd.concat(dfs, ignore_index=True) if dfs else WillDo_df
 
-                # 空または全てNAの列を除外して結合
-                new_entry_df = new_entry_df.dropna(how='all', axis=1)
-                WillDo_df = pd.concat(
-                    [WillDo_df, new_entry_df],
-                    ignore_index=True)
             except Exception as e:
                 raise ValueError(f"Error while adding entry to WillDo_df: {e}")
 
