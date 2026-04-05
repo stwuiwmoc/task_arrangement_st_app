@@ -1,7 +1,7 @@
 import math
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pandas as pd
 import st_aggrid
@@ -347,14 +347,21 @@ if __name__ == "__main__":
                             key="willdo_timer3_btn", use_container_width=True)
                         if record_button:
                             if (task_achievement_minutes is not None) and (task_wraptime_minutes is not None):
-                                Output_C.record_completed_task_WorkLog(
-                                    willdo_date=selected_str,
-                                    achievement_minutes=int(task_achievement_minutes),
-                                    wraptime_minutes=int(task_wraptime_minutes),
-                                    task_id=now_row["タスクID"],
-                                    subtask_id=now_row["サブID"]
-                                )
-                                st.success("記録しました")
+                                # 新タスクの開始時刻を事前計算して時系列整合性チェック
+                                new_end = datetime.now() - timedelta(minutes=int(task_wraptime_minutes))
+                                new_start = new_end - timedelta(minutes=int(task_achievement_minutes))
+                                conflict_start = Output_C.get_WorkLog_conflict_last_start_time(selected_str, new_start)
+                                if conflict_start is not None:
+                                    st.warning(f"工数実績csv既存行の開始時刻は {conflict_start.strftime('%H:%M')} のため、入力値では時系列が矛盾します")
+                                else:
+                                    Output_C.record_completed_task_WorkLog(
+                                        willdo_date=selected_str,
+                                        achievement_minutes=int(task_achievement_minutes),
+                                        wraptime_minutes=int(task_wraptime_minutes),
+                                        task_id=now_row["タスクID"],
+                                        subtask_id=now_row["サブID"]
+                                    )
+                                    st.success("記録しました")
                             else:
                                 st.warning("分数を両方入力してください")
 
@@ -416,15 +423,22 @@ if __name__ == "__main__":
                     )
                     if meeting_record_btn:
                         if meeting_name_input and (meeting_minutes is not None) and (wraptime_minutes is not None):
-                            Output_C.record_completed_meeting_WorkLog(
-                                willdo_date=selected_str,
-                                achievement_minutes=int(meeting_minutes),
-                                wraptime_minutes=int(wraptime_minutes),
-                                meeting_name=meeting_name_input,
-                                order_number=order_input,
-                                is_meeting_planned=is_meeting_planned
-                            )
-                            st.info("記録しました")
+                            # 新タスクの開始時刻を事前計算して時系列整合性チェック
+                            new_end = datetime.now() - timedelta(minutes=int(wraptime_minutes))
+                            new_start = new_end - timedelta(minutes=int(meeting_minutes))
+                            conflict_start = Output_C.get_WorkLog_conflict_last_start_time(selected_str, new_start)
+                            if conflict_start is not None:
+                                st.warning(f"工数実績csv既存行の開始時刻は {conflict_start.strftime('%H:%M')} のため、入力値では時系列が矛盾します")
+                            else:
+                                Output_C.record_completed_meeting_WorkLog(
+                                    willdo_date=selected_str,
+                                    achievement_minutes=int(meeting_minutes),
+                                    wraptime_minutes=int(wraptime_minutes),
+                                    meeting_name=meeting_name_input,
+                                    order_number=order_input,
+                                    is_meeting_planned=is_meeting_planned
+                                )
+                                st.info("記録しました")
                         else:
                             st.warning("会議名とオーダと分数を全て入力してください")
 

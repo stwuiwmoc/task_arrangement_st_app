@@ -260,6 +260,45 @@ def check_WorkLog_latest_end_datetime(willdo_date: str) -> datetime:
 
     return last_end_time
 
+
+def get_WorkLog_conflict_last_start_time(
+        willdo_date: str, new_start_time: datetime) -> "datetime | None":
+    """新タスクの開始時刻が既存最終行の開始時刻より後であるか（時系列の整合性）を確認する。
+
+    新タスクの開始時刻で既存最終行の終了時刻が更新された場合に、
+    既存最終行の開始時刻より終了時刻が早くなる矛盾が発生しないかを検証する。
+    工数実績csvが存在しない、または空の場合は矛盾なしとして None を返す。
+
+    Args:
+        willdo_date (str): WillDo日付（YYMMDD形式）
+        new_start_time (datetime): 新タスクの開始時刻
+
+    Returns:
+        datetime | None: 矛盾が発生する場合は既存最終行の開始時刻、整合性が取れている場合はNone
+    """
+    worklog_csv_path = _get_worklog_csv_path(willdo_date)
+
+    if not os.path.exists(worklog_csv_path):
+        return None
+
+    try:
+        worklog_df = pd.read_csv(worklog_csv_path, encoding="utf-8")
+    except Exception:
+        return None
+
+    if worklog_df.empty:
+        return None
+
+    last_row = worklog_df.iloc[-1]
+    last_start_time_str = last_row[WORKLOG_COLUMNS[7]]
+    last_start_time = datetime.strptime(last_start_time_str, "%Y-%m-%d %H:%M:%S")
+
+    # 新タスク開始時刻が既存最終行の開始時刻より前なら矛盾あり→開始時刻を返す
+    if new_start_time < last_start_time:
+        return last_start_time
+    return None
+
+
 # -------------------------------------------------------------
 # 上記の関数で使用する補助関数群
 # -------------------------------------------------------------
