@@ -311,7 +311,7 @@ if __name__ == "__main__":
                                 task_id=now_row["タスクID"],
                                 subtask_id=now_row["サブID"]
                             )
-                            st.success("開始しました")
+                            st.success("開始")
 
                 with col_timer2:
                     # 続けて開始ボタン
@@ -324,7 +324,7 @@ if __name__ == "__main__":
                                 task_id=now_row["タスクID"],
                                 subtask_id=now_row["サブID"]
                             )
-                            st.success("開始しました")
+                            st.success("開始")
                         else:
                             st.warning("直前のサブタスク終了時刻を過ぎているため、続けて開始できません。新規にタイマーを開始してください。")
 
@@ -361,7 +361,7 @@ if __name__ == "__main__":
                                         task_id=now_row["タスクID"],
                                         subtask_id=now_row["サブID"]
                                     )
-                                    st.success("記録しました")
+                                    st.success("記録")
                             else:
                                 st.warning("分数を両方入力してください")
 
@@ -438,12 +438,12 @@ if __name__ == "__main__":
                                     order_number=order_input,
                                     is_meeting_planned=is_meeting_planned
                                 )
-                                st.info("記録しました")
+                                st.info("記録")
                         else:
                             st.warning("会議名とオーダと分数を全て入力してください")
 
             with col_add_task:
-                st.markdown("#### Will-doリストにタスク追加", unsafe_allow_html=True)
+                st.markdown("#### Will-doにタスク追加", unsafe_allow_html=True)
 
                 # タスクID一覧を取得しセレクトボックスで選択
                 task_choices, task_id_to_csv = task_view.get_task_choices(
