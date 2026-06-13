@@ -369,7 +369,7 @@ if __name__ == "__main__":
                 st.warning("「今」が複数行選択されています")
 
             # タスクID・サブタスクID指定と会議名・オーダ指定で実績記録操作を2カラムで表示
-            col_record_meeting, col_add_task = st.columns([10, 8])
+            col_add_task, col_record_meeting = st.columns([8, 10])
 
             with col_record_meeting:
                 st.markdown("#### 打合せ実績を記録", unsafe_allow_html=True)
