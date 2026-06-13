@@ -449,8 +449,20 @@ if __name__ == "__main__":
                 task_choices, task_id_to_csv = task_view.get_task_choices(
                     choice_from_active=True,
                     include_task_name=True)
+                sorted_task_choices = sorted(task_choices)
+                # 「今」のタスクIDに対応するデフォルトインデックスを取得
+                now_task_default_index = 0
+                if task_choices:
+                    now_rows = edited_df[edited_df["状態"] == "今"]
+                    if not now_rows.empty:
+                        now_task_id = now_rows.iloc[0]["タスクID"]
+                        for _i, _label in enumerate(sorted_task_choices):
+                            if _label.split("：")[0] == now_task_id:
+                                now_task_default_index = _i
+                                break
                 task_id_label = st.selectbox(
-                    "タスクIDを選択", sorted(task_choices), key="willdo_taskid_selectbox", label_visibility="collapsed"
+                    "タスクIDを選択", sorted_task_choices, index=now_task_default_index,
+                    key="willdo_taskid_selectbox", label_visibility="collapsed"
                 )
                 # ラベルからタスクIDのみ抽出
                 if task_choices:
