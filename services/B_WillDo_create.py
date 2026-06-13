@@ -46,6 +46,10 @@ def create_new_WillDo_with_DailyTasks():
     # Will-doエントリをDataFrameに追加
     WillDo_df = add_WillDo_Tasks(WillDo_df, Daily_tasks_dict)
 
+    # 先頭行の「状態」列に「今」を設定
+    if not WillDo_df.empty:
+        WillDo_df.at[0, "状態"] = "今"
+
     # Will-doリストDataFrameを保存 ファイル名: data/WillDo/WillDoyymmdd.csv
     ESS_dt_str = Task_def.get_ESS_dt().strftime('%y%m%d')
     willdo_file_path = os.path.join(
