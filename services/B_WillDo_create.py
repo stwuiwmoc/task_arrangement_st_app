@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
@@ -50,6 +51,9 @@ def create_new_WillDo_with_DailyTasks():
     willdo_file_path = os.path.join(
         "data", "WillDo", f"WillDo{ESS_dt_str}.csv")
     WillDo_df.to_csv(willdo_file_path, index=False, encoding="utf-8-sig")
+
+    # 新規作成したものと一つ前の最新以外をoldフォルダに移動
+    _archive_old_willdo_csvs(keep_latest_n=2)
     return
 
 
@@ -252,7 +256,10 @@ def get_latest_WillDo_datetime() -> datetime:
             raise ValueError(f"Filename {filename} does not match expected pattern.")
 
     worklog_dir = os.path.join("data", "WillDo")
+    worklog_old_dir = os.path.join("data", "WillDo", "old")
     files = [f for f in os.listdir(worklog_dir) if re.match(r"WillDo\d{6}\.csv", f)]
+    if os.path.exists(worklog_old_dir):
+        files += [f for f in os.listdir(worklog_old_dir) if re.match(r"WillDo\d{6}\.csv", f)]
     if not files:
         raise FileNotFoundError("WillDoリストファイルが見つかりません。")
 
@@ -527,6 +534,28 @@ def add_WillDo_Tasks(WillDo_df: pd.DataFrame, Tasks_dict: Dict[str, Task_def.Tas
                 raise ValueError(f"Error while adding entry to WillDo_df: {e}")
 
     return WillDo_df
+
+
+def _archive_old_willdo_csvs(keep_latest_n: int = 2) -> None:
+    """data/WillDoフォルダ内のWillDo CSVを日付降順に並び、新しい方からkeep_latest_n個を残しそれ以外をoldフォルダに移動する。"""
+    willdo_dir = os.path.join("data", "WillDo")
+    old_dir = os.path.join(willdo_dir, "old")
+    os.makedirs(old_dir, exist_ok=True)
+
+    files = [
+        f for f in os.listdir(willdo_dir)
+        if re.match(r"WillDo\d{6}\.csv", f)
+    ]
+    # 日付降順にソート
+    def _date_key(filename):
+        m = re.match(r"WillDo(\d{6})\.csv", filename)
+        return datetime.strptime(m.group(1), "%y%m%d") if m else datetime.min
+    files.sort(key=_date_key, reverse=True)
+
+    for f in files[keep_latest_n:]:
+        src = os.path.join(willdo_dir, f)
+        dst = os.path.join(old_dir, f)
+        shutil.move(src, dst)
 
 
 if __name__ == "__main__":
