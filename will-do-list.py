@@ -160,8 +160,8 @@ def sort_willdo_for_display(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: 並べ替え後のDataFrame
     """
     done_statuses = ["済", "不要", "後回"]
-    df_active = df[~df["状態"].isin(done_statuses)].sort_values(by="残時間/日", ascending=False)
-    df_done = df[df["状態"].isin(done_statuses)].sort_values(by="残時間/日", ascending=False)
+    df_active = df[~df["状態"].isin(done_statuses)].sort_values(by=["残時間/日", "タスクID"], ascending=[False, True])
+    df_done = df[df["状態"].isin(done_statuses)].sort_values(by=["残時間/日", "タスクID"], ascending=[False, True])
     return pd.concat([df_active, df_done], ignore_index=True)
 
 

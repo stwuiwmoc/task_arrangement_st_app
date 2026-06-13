@@ -43,7 +43,7 @@ def extract_rest_time_from_WorkLog(
         rest_minutes = (next_start - current_end).total_seconds() / 60
 
         # 推奨の休憩記録は指定した分数以上の場合のみ追加
-        if rest_minutes < 4:
+        if rest_minutes < 3:
             # 休憩時間が指定の分数未満の場合、実績のみ記録
             rest_records.append({
                 '休憩(推奨)': None,
