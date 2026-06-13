@@ -311,7 +311,7 @@ if __name__ == "__main__":
                                 task_id=now_row["タスクID"],
                                 subtask_id=now_row["サブID"]
                             )
-                            st.success("開始しました")
+                            st.success("開始")
 
                 with col_timer2:
                     # 続けて開始ボタン
@@ -324,7 +324,7 @@ if __name__ == "__main__":
                                 task_id=now_row["タスクID"],
                                 subtask_id=now_row["サブID"]
                             )
-                            st.success("開始しました")
+                            st.success("開始")
                         else:
                             st.warning("直前のサブタスク終了時刻を過ぎているため、続けて開始できません。新規にタイマーを開始してください。")
 
@@ -361,7 +361,7 @@ if __name__ == "__main__":
                                         task_id=now_row["タスクID"],
                                         subtask_id=now_row["サブID"]
                                     )
-                                    st.success("記録しました")
+                                    st.success("記録")
                             else:
                                 st.warning("分数を両方入力してください")
 
@@ -369,7 +369,7 @@ if __name__ == "__main__":
                 st.warning("「今」が複数行選択されています")
 
             # タスクID・サブタスクID指定と会議名・オーダ指定で実績記録操作を2カラムで表示
-            col_record_meeting, col_add_task = st.columns([10, 8])
+            col_add_task, col_record_meeting = st.columns([8, 10])
 
             with col_record_meeting:
                 st.markdown("#### 打合せ実績を記録", unsafe_allow_html=True)
@@ -438,19 +438,31 @@ if __name__ == "__main__":
                                     order_number=order_input,
                                     is_meeting_planned=is_meeting_planned
                                 )
-                                st.info("記録しました")
+                                st.info("記録")
                         else:
                             st.warning("会議名とオーダと分数を全て入力してください")
 
             with col_add_task:
-                st.markdown("#### Will-doリストにタスク追加", unsafe_allow_html=True)
+                st.markdown("#### Will-doにタスク追加", unsafe_allow_html=True)
 
                 # タスクID一覧を取得しセレクトボックスで選択
                 task_choices, task_id_to_csv = task_view.get_task_choices(
                     choice_from_active=True,
                     include_task_name=True)
+                sorted_task_choices = sorted(task_choices)
+                # 「今」のタスクIDに対応するデフォルトインデックスを取得
+                now_task_default_index = 0
+                if task_choices:
+                    now_rows = edited_df[edited_df["状態"] == "今"]
+                    if not now_rows.empty:
+                        now_task_id = now_rows.iloc[0]["タスクID"]
+                        for _i, _label in enumerate(sorted_task_choices):
+                            if _label.split("：")[0] == now_task_id:
+                                now_task_default_index = _i
+                                break
                 task_id_label = st.selectbox(
-                    "タスクIDを選択", sorted(task_choices), key="willdo_taskid_selectbox", label_visibility="collapsed"
+                    "タスクIDを選択", sorted_task_choices, index=now_task_default_index,
+                    key="willdo_taskid_selectbox", label_visibility="collapsed"
                 )
                 # ラベルからタスクIDのみ抽出
                 if task_choices:

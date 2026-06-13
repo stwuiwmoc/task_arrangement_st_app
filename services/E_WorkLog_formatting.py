@@ -167,7 +167,7 @@ def sum_df_each_order(
 
 
 def convert_df_for_display(
-        df: pd.DataFrame) -> pd.DataFrame:
+        df: pd.DataFrame, sort: bool)-> pd.DataFrame:
 
     # 1. 時間列と工数列を、分数から時間表記に変換
     # ※ 例: 67 -> "1h07m"
@@ -179,7 +179,8 @@ def convert_df_for_display(
     df_display = df_display[['オーダ番号', '工数', '実時間', '名前']]
 
     # 3. 工数をkeyにして降順ソート
-    df_display = df_display.sort_values(by='工数', ascending=False)
+    if sort:
+        df_display = df_display.sort_values(by='工数', ascending=False)
 
     return df_display
 
