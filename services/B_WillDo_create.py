@@ -191,6 +191,7 @@ def get_without_today_latest_WillDO_date() -> datetime.date:
         datetime.date: 本日を除く最新日付。存在しない場合はNone。
     """
     willdo_dir = os.path.join("data", "WillDo")
+    willdo_old_dir = os.path.join("data", "WillDo", "old")
     if not os.path.exists(willdo_dir):
         return ""
 
@@ -198,6 +199,11 @@ def get_without_today_latest_WillDO_date() -> datetime.date:
         f for f in os.listdir(willdo_dir)
         if f.startswith("WillDo") and f.endswith(".csv")
     ]
+    if os.path.exists(willdo_old_dir):
+        willdo_files += [
+            f for f in os.listdir(willdo_old_dir)
+            if f.startswith("WillDo") and f.endswith(".csv")
+        ]
     dates = []
     for filename in willdo_files:
         date_str = filename[len("WillDo"):len("WillDo") + 6]
