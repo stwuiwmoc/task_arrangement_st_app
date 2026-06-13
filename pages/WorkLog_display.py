@@ -55,14 +55,14 @@ if __name__ == "__main__":
         st.data_editor(df_break, width="stretch", hide_index=True)
 
         st.markdown("#### BJP登録用出力")
-        st.table(Output_E.convert_df_for_display(df_sum_order_withMTG))
+        st.table(Output_E.convert_df_for_display(df_sum_order_withMTG, sort=False))
 
         st.markdown("#### サブタスク別集計")
         st.data_editor(
             df_sum_subtask_withMTG, width="stretch")
 
         st.markdown("#### 朝会報告用（MTG除外）")
-        st.table(Output_E.convert_df_for_display(df_sum_order_withoutMTG))
+        st.table(Output_E.convert_df_for_display(df_sum_order_withoutMTG, sort=True))
 
         st.markdown("#### Will-doリスト実績表示")
 
