@@ -29,7 +29,9 @@ if __name__ == "__main__":
         )
 
     selected_str = selected_date.strftime("%y%m%d")
-    WorkLog_filepath = os.path.join("data", "WorkLogs", f"工数実績{selected_str}.csv")
+    _worklog_main = os.path.join("data", "WorkLogs", f"工数実績{selected_str}.csv")
+    _worklog_old = os.path.join("data", "WorkLogs", "old", f"工数実績{selected_str}.csv")
+    WorkLog_filepath = _worklog_main if os.path.exists(_worklog_main) else _worklog_old
 
     if os.path.exists(WorkLog_filepath):
         # データ処理
@@ -66,8 +68,9 @@ if __name__ == "__main__":
 
         st.markdown("#### Will-doリスト実績表示")
 
-        willdo_dir = os.path.join("data", "WillDo")
-        willdo_file = os.path.join(willdo_dir, f"WillDo{selected_str}.csv")
+        _willdo_main = os.path.join("data", "WillDo", f"WillDo{selected_str}.csv")
+        _willdo_old = os.path.join("data", "WillDo", "old", f"WillDo{selected_str}.csv")
+        willdo_file = _willdo_main if os.path.exists(_willdo_main) else _willdo_old
 
         if os.path.exists(willdo_file):
             df_past = pd.read_csv(willdo_file, encoding="utf-8-sig")

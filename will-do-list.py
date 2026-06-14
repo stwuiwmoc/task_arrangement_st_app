@@ -241,8 +241,9 @@ if __name__ == "__main__":
     ESS_dt = Task_def.get_ESS_dt()
     selected_str = ESS_dt.strftime("%y%m%d")
 
-    willdo_dir = os.path.join("data", "WillDo")
-    willdo_file = os.path.join(willdo_dir, f"WillDo{selected_str}.csv")
+    _willdo_main = os.path.join("data", "WillDo", f"WillDo{selected_str}.csv")
+    _willdo_old = os.path.join("data", "WillDo", "old", f"WillDo{selected_str}.csv")
+    willdo_file = _willdo_main if os.path.exists(_willdo_main) else _willdo_old
     if os.path.exists(willdo_file):
         df_today = load_willdo_csv(willdo_file)
         # 表示用に並べ替え: 残時間/日降順・完了系を末尾へ
