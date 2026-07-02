@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
@@ -29,6 +30,8 @@ def create_new_WillDo_with_DailyTasks():
     # Will-doリストDataFrameを初期化
     WillDo_df = pd.DataFrame(
         columns=[col.metadata["label"] for col in Task_def.WillDoEntry.__dataclass_fields__.values()])
+    # 「状態」列（status）は全て空でobject型に明示
+    WillDo_df = WillDo_df.astype({"状態": object})
 
     # 作業開始時点で最新のWillDoファイルを特定
     target_date = get_latest_WillDo_datetime()
@@ -43,11 +46,18 @@ def create_new_WillDo_with_DailyTasks():
     # Will-doエントリをDataFrameに追加
     WillDo_df = add_WillDo_Tasks(WillDo_df, Daily_tasks_dict)
 
+    # 先頭行の「状態」列に「今」を設定
+    if not WillDo_df.empty:
+        WillDo_df.at[0, "状態"] = "今"
+
     # Will-doリストDataFrameを保存 ファイル名: data/WillDo/WillDoyymmdd.csv
     ESS_dt_str = Task_def.get_ESS_dt().strftime('%y%m%d')
     willdo_file_path = os.path.join(
         "data", "WillDo", f"WillDo{ESS_dt_str}.csv")
     WillDo_df.to_csv(willdo_file_path, index=False, encoding="utf-8-sig")
+
+    # 新規作成したものと一つ前の最新以外をoldフォルダに移動
+    _archive_old_willdo_csvs(keep_latest_n=2)
     return
 
 
@@ -104,10 +114,10 @@ def add_WillDo_Task_with_ID(
         for k, v in asdict(WillDo_entry).items()}
     try:
         new_entry_df = pd.DataFrame([entry_dict])
-
-        # 空または全てNAの列を除外して結合
-        new_entry_df = new_entry_df.dropna(how='all', axis=1)
-        WillDo_df = pd.concat([WillDo_df, new_entry_df], ignore_index=True)
+        new_entry_df = new_entry_df.reindex(columns=WillDo_df.columns)
+        # 空のDataFrameを除外してconcatすることでFutureWarningを回避
+        dfs = [df for df in [WillDo_df, new_entry_df] if not df.empty]
+        WillDo_df = pd.concat(dfs, ignore_index=True) if dfs else WillDo_df
 
     except Exception as e:
         raise ValueError(f"Error while processing DataFrame: {e}")
@@ -163,12 +173,11 @@ def add_WillDo_meeting(
 
     try:
         new_entry_df = pd.DataFrame([entry_dict])
+        new_entry_df = new_entry_df.reindex(columns=WillDo_df.columns)
+        # 空のDataFrameを除外してconcatすることでFutureWarningを回避
+        dfs = [df for df in [WillDo_df, new_entry_df] if not df.empty]
+        WillDo_df = pd.concat(dfs, ignore_index=True) if dfs else WillDo_df
 
-        # 空または全てNAの列を除外して結合
-        new_entry_df = new_entry_df.dropna(how='all', axis=1)
-        WillDo_df = pd.concat(
-            [WillDo_df, new_entry_df],
-            ignore_index=True)
     except Exception as e:
         raise ValueError(f"Error while adding entry to WillDo_df: {e}")
 
@@ -190,6 +199,7 @@ def get_without_today_latest_WillDO_date() -> datetime.date:
         datetime.date: 本日を除く最新日付。存在しない場合はNone。
     """
     willdo_dir = os.path.join("data", "WillDo")
+    willdo_old_dir = os.path.join("data", "WillDo", "old")
     if not os.path.exists(willdo_dir):
         return ""
 
@@ -197,6 +207,11 @@ def get_without_today_latest_WillDO_date() -> datetime.date:
         f for f in os.listdir(willdo_dir)
         if f.startswith("WillDo") and f.endswith(".csv")
     ]
+    if os.path.exists(willdo_old_dir):
+        willdo_files += [
+            f for f in os.listdir(willdo_old_dir)
+            if f.startswith("WillDo") and f.endswith(".csv")
+        ]
     dates = []
     for filename in willdo_files:
         date_str = filename[len("WillDo"):len("WillDo") + 6]
@@ -245,7 +260,10 @@ def get_latest_WillDo_datetime() -> datetime:
             raise ValueError(f"Filename {filename} does not match expected pattern.")
 
     worklog_dir = os.path.join("data", "WillDo")
+    worklog_old_dir = os.path.join("data", "WillDo", "old")
     files = [f for f in os.listdir(worklog_dir) if re.match(r"WillDo\d{6}\.csv", f)]
+    if os.path.exists(worklog_old_dir):
+        files += [f for f in os.listdir(worklog_old_dir) if re.match(r"WillDo\d{6}\.csv", f)]
     if not files:
         raise FileNotFoundError("WillDoリストファイルが見つかりません。")
 
@@ -438,9 +456,9 @@ def ID_to_WillDoEntry(task_id: str, subtask_id: str) -> Task_def.WillDoEntry:
             end_idx = len(filtered_ids) - 1
         target_subtasks_df = filtered_subtasks_df.iloc[:end_idx+1]
 
-        # 5. 4で取得したサブタスク全ての（見込み時間 - 実績時間）を合算
+        # 5. 4で取得したサブタスク全ての（見込み時間）を合算
         estimated_time_sum = (
-            target_subtasks_df["estimated_time"] - target_subtasks_df["actual_time"]
+            target_subtasks_df["estimated_time"]
         ).sum() if not target_subtasks_df.empty else 0
 
         # 今日から〆切日までの日本の祝日を除いた平日日数を取得
@@ -454,8 +472,8 @@ def ID_to_WillDoEntry(task_id: str, subtask_id: str) -> Task_def.WillDoEntry:
             d += timedelta(days=1)
 
         if days_left is not None and days_left <= 1:
-            # 〆切日までの日数が1以下の場合は、合算時間をそのまま一日当たり作業時間目安とする
-            estimated_time_per_day = estimated_time_sum
+            # 〆切日までの日数が1以下の場合は、合算時間の2倍を一日当たり作業時間目安とする
+            estimated_time_per_day = round(estimated_time_sum / 0.5, 0)
         else:
             # そうでない場合は、合算時間を〆切日までの日数で割った値を一日当たり作業時間目安とする
             estimated_time_per_day = round(estimated_time_sum / (days_left - 0.5), 0)
@@ -465,10 +483,10 @@ def ID_to_WillDoEntry(task_id: str, subtask_id: str) -> Task_def.WillDoEntry:
         nearest_deadline = None
         nearest_subtask_id = None
 
-        # 残りのサブタスク全ての（見込み時間 - 実績時間）を合算
-        estimated_time_per_day = (
-            filtered_subtasks_df["estimated_time"] - filtered_subtasks_df["actual_time"]
-        ).sum() if not filtered_subtasks_df.empty else 0
+        # 残りのサブタスク全ての（見込み時間）を合算して2倍を一日当たり作業時間目安とする
+        estimated_time_per_day = round((
+            filtered_subtasks_df["estimated_time"]
+        ).sum() / 0.5, 0) if not filtered_subtasks_df.empty else 0
 
     # WillDoEntryオブジェクトを生成して返す
     return Task_def.WillDoEntry(
@@ -511,16 +529,37 @@ def add_WillDo_Tasks(WillDo_df: pd.DataFrame, Tasks_dict: Dict[str, Task_def.Tas
                 for k, v in asdict(will_do_entry).items()}
             try:
                 new_entry_df = pd.DataFrame([entry_dict])
+                new_entry_df = new_entry_df.reindex(columns=WillDo_df.columns)
+                # 空のDataFrameを除外してconcatすることでFutureWarningを回避
+                dfs = [df for df in [WillDo_df, new_entry_df] if not df.empty]
+                WillDo_df = pd.concat(dfs, ignore_index=True) if dfs else WillDo_df
 
-                # 空または全てNAの列を除外して結合
-                new_entry_df = new_entry_df.dropna(how='all', axis=1)
-                WillDo_df = pd.concat(
-                    [WillDo_df, new_entry_df],
-                    ignore_index=True)
             except Exception as e:
                 raise ValueError(f"Error while adding entry to WillDo_df: {e}")
 
     return WillDo_df
+
+
+def _archive_old_willdo_csvs(keep_latest_n: int = 2) -> None:
+    """data/WillDoフォルダ内のWillDo CSVを日付降順に並び、新しい方からkeep_latest_n個を残しそれ以外をoldフォルダに移動する。"""
+    willdo_dir = os.path.join("data", "WillDo")
+    old_dir = os.path.join(willdo_dir, "old")
+    os.makedirs(old_dir, exist_ok=True)
+
+    files = [
+        f for f in os.listdir(willdo_dir)
+        if re.match(r"WillDo\d{6}\.csv", f)
+    ]
+    # 日付降順にソート
+    def _date_key(filename):
+        m = re.match(r"WillDo(\d{6})\.csv", filename)
+        return datetime.strptime(m.group(1), "%y%m%d") if m else datetime.min
+    files.sort(key=_date_key, reverse=True)
+
+    for f in files[keep_latest_n:]:
+        src = os.path.join(willdo_dir, f)
+        dst = os.path.join(old_dir, f)
+        shutil.move(src, dst)
 
 
 if __name__ == "__main__":

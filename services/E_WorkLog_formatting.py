@@ -12,11 +12,87 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models.Task_definition as Task_def
 
 
+def extract_rest_time_from_WorkLog(
+        csv_filepath: str) -> pd.DataFrame:
+    """
+    工数実績CSVファイルから休憩時間を抽出し、登録用の休憩時間推奨値を計算する。
+
+    Args:
+        csv_filepath (str): 工数実績CSVファイルのパス
+
+    Returns:
+        pd.DataFrame: 休憩時間のDataFrame
+    """
+    # 1. 工数実績CSVファイルの全ての行・列をdataframeとして読み込む
+    # ※開始時刻列、終了時刻列はdatetime型として読み込む
+    df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
+    # 秒数を切り捨てて分単位に統一
+    df['開始時刻'] = df['開始時刻'].dt.floor('min')
+    df['終了時刻'] = df['終了時刻'].dt.floor('min')
+
+    # 2. 休憩時間のみのdfを新規作成
+    rest_records = []
+    skipped_rest_minutes = 0
+    for i in range(len(df) - 1):
+        current_end = df.iloc[i]['終了時刻']
+        next_start = df.iloc[i + 1]['開始時刻']
+        # 工数実績csvのある行の終了時刻と次の行の開始時刻が同じ場合は、スキップ
+        if current_end == next_start:
+            continue
+        # 工数実績csvのある行の終了時刻と次の行の開始時刻が異なる場合、その差分を休憩時間として抽出
+        rest_minutes = (next_start - current_end).total_seconds() / 60
+
+        # 推奨の休憩記録は指定した分数以上の場合のみ追加
+        if rest_minutes < 3:
+            # 休憩時間が指定の分数未満の場合、実績のみ記録
+            rest_records.append({
+                '休憩(推奨)': None,
+                '休憩開始(推奨)': None,
+                '休憩終了(推奨)': None,
+                '休憩(実績)': int(rest_minutes),
+                '休憩開始(実績)': current_end.strftime("%H:%M"),
+                '休憩終了(実績)': next_start.strftime("%H:%M"),
+            })
+            # 指定の分数未満の休憩時間はスキップし、スキップされた休憩時間を蓄積
+            skipped_rest_minutes += rest_minutes
+
+        else:
+            # スキップされた休憩時間がある場合、その中から1分を休憩開始時刻に移動
+            if skipped_rest_minutes >= 1:
+                skipped_rest_minutes -= 1
+                current_end_adjusted = current_end - timedelta(minutes=1)
+            else:
+                current_end_adjusted = current_end
+            # スキップされた休憩時間がある場合、その中から1分を休憩終了時刻に移動
+            if skipped_rest_minutes >= 1:
+                skipped_rest_minutes -= 1
+                next_start_adjusted = next_start + timedelta(minutes=1)
+            else:
+                next_start_adjusted = next_start
+
+            rest_minutes_adjusted = (next_start_adjusted - current_end_adjusted).total_seconds() / 60
+
+            rest_records.append({
+                '休憩(推奨)': int(rest_minutes_adjusted),
+                '休憩開始(推奨)': current_end_adjusted.strftime("%H:%M"),
+                '休憩終了(推奨)': next_start_adjusted.strftime("%H:%M"),
+                '休憩(実績)': int(rest_minutes),
+                '休憩開始(実績)': current_end.strftime("%H:%M"),
+                '休憩終了(実績)': next_start.strftime("%H:%M"),
+            })
+
+    df_break = pd.DataFrame(rest_records)
+    return df_break
+
+
 def sum_df_each_subtask(csv_filepath: str, include_MTG: bool) -> pd.DataFrame:
 
     # 1. CSVファイルの全ての行・列をdataframeとして読み込む
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
     df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
+    # 秒数を切り捨てて分単位に統一
+    df['開始時刻'] = df['開始時刻'].dt.floor('min')
+    df['終了時刻'] = df['終了時刻'].dt.floor('min')
     # 2. MTG行のフィルタリング（タスクID列に'MTG'を含むかどうか）
     if not include_MTG:
         df = df[~df['タスクID'].astype(str).str.contains('MTG', na=False)]
@@ -91,7 +167,7 @@ def sum_df_each_order(
 
 
 def convert_df_for_display(
-        df: pd.DataFrame) -> pd.DataFrame:
+        df: pd.DataFrame, sort: bool)-> pd.DataFrame:
 
     # 1. 時間列と工数列を、分数から時間表記に変換
     # ※ 例: 67 -> "1h07m"
@@ -102,6 +178,10 @@ def convert_df_for_display(
     # 2. 列の並び順を変更
     df_display = df_display[['オーダ番号', '工数', '実時間', '名前']]
 
+    # 3. 工数をkeyにして降順ソート
+    if sort:
+        df_display = df_display.sort_values(by='工数', ascending=False)
+
     return df_display
 
 
@@ -109,6 +189,9 @@ def calc_WorkLog_summary(csv_filepath: str, df_truncated: pd.DataFrame, add_dayt
     # 1. CSVファイルの全ての行・列をdataframeとして読み込む
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
     df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
+    # 秒数を切り捨てて分単位に統一
+    df['開始時刻'] = df['開始時刻'].dt.floor('min')
+    df['終了時刻'] = df['終了時刻'].dt.floor('min')
 
     # 2. 開始時刻で最も早い行のdatetimeと、終了時刻で最も遅い行のdatetimeを取得
     earliest_start = df['開始時刻'].min()
@@ -165,6 +248,9 @@ def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
 
     df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
+    # 秒数を切り捨てて分単位に統一
+    df['開始時刻'] = df['開始時刻'].dt.floor('min')
+    df['終了時刻'] = df['終了時刻'].dt.floor('min')
 
     # 2. 全タスクを1本の横棒（同じy位置）にbroken_barhで描画
     df['タスク表示名'] = df['タスク名'].astype(str) + ' / ' + df['サブタスク名'].astype(str)
