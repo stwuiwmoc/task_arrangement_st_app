@@ -43,7 +43,7 @@ def extract_rest_time_from_WorkLog(
         rest_minutes = (next_start - current_end).total_seconds() / 60
 
         # 推奨の休憩記録は指定した分数以上の場合のみ追加
-        if rest_minutes < 3:
+        if rest_minutes < 4:
             # 休憩時間が指定の分数未満の場合、実績のみ記録
             rest_records.append({
                 '休憩(推奨)': None,
@@ -57,18 +57,19 @@ def extract_rest_time_from_WorkLog(
             skipped_rest_minutes += rest_minutes
 
         else:
-            # スキップされた休憩時間がある場合、その中から1分を休憩開始時刻に移動
-            if skipped_rest_minutes >= 1:
-                skipped_rest_minutes -= 1
-                current_end_adjusted = current_end - timedelta(minutes=1)
-            else:
-                current_end_adjusted = current_end
-            # スキップされた休憩時間がある場合、その中から1分を休憩終了時刻に移動
-            if skipped_rest_minutes >= 1:
-                skipped_rest_minutes -= 1
-                next_start_adjusted = next_start + timedelta(minutes=1)
-            else:
-                next_start_adjusted = next_start
+            # 開始側・終了側に1分ずつ移動し、残りがあればさらに1分ずつ移動する（各最大2分）
+            start_adjust = 0
+            end_adjust = 0
+            for _ in range(2):  # 最大2回繰り返して最大合計4分の調整を行う
+                if skipped_rest_minutes >= 1:
+                    skipped_rest_minutes -= 1
+                    start_adjust += 1
+                if skipped_rest_minutes >= 1:
+                    skipped_rest_minutes -= 1
+                    end_adjust += 1
+            current_end_adjusted = current_end - timedelta(minutes=start_adjust)
+            next_start_adjusted = next_start + timedelta(minutes=end_adjust)
+
 
             rest_minutes_adjusted = (next_start_adjusted - current_end_adjusted).total_seconds() / 60
 
