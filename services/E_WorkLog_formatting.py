@@ -284,14 +284,20 @@ def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
     def _draw_timeband(ax, df_band, start_time, end_time):
         barh_data = []
         color_list = []
+        text_data = []
         for _, row in df_band.iterrows():
             start = mdates.date2num(row['開始時刻'])
             duration = (row['終了時刻'] - row['開始時刻']).total_seconds() / 86400
             barh_data.append((start, duration))
             # 全体dfのindexを使って色を割り当て（黄金比で分散）
             color_list.append(index_to_color[row.name])
+            text_data.append((start + duration / 2, str(row.name)))
         if barh_data:
             ax.broken_barh(barh_data, (0.7, 0.4), facecolors=color_list)
+            for x_center, label in text_data:
+                ax.text(
+                    x_center, 0.9, label, ha='center', va='center',
+                    fontsize=12, clip_on=True, color='black', fontweight='extra bold')
         ax.set_yticks([])
         ax.set_yticklabels([])
         ax.xaxis.set_major_locator(mdates.MinuteLocator(byminute=[0, 30], interval=1))
