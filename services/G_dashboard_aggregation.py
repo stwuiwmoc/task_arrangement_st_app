@@ -129,7 +129,7 @@ def _classify_task_status(
         task: Task_def.Task,
         today: datetime.date,
         urgent_days: int = 2) -> str:
-    """タスクの状態を[待機中,〆切未定,〆切超過,完了間近,〆切迫る,未着手,着手済]に分類する
+    """タスクの状態を[〆切未定,〆切超過,完了間近,〆切迫る,未着手,着手済]に分類する
 
     Args:
         task (Task_def.Task): Taskオブジェクト
@@ -140,11 +140,6 @@ def _classify_task_status(
         str: タスクの状態を表す文字列
     """
     incomplete_df = task.sub_tasks[task.sub_tasks["is_incomplete"] == True]
-
-    # 待機中（待機日あり）
-    w_date = _parse_date_str(task.waiting_date)
-    if w_date is not None:
-        return "待機中"
 
     # 〆切未定（未完了サブタスクのすべてで〆切未設定）
     if incomplete_df["deadline_date"].apply(_parse_date_str).isna().all():

@@ -57,7 +57,7 @@ def render_filters(df: pd.DataFrame) -> pd.DataFrame:
         order = st.selectbox("オーダ略", opts, key="filter_order")
 
     with f3:
-        opts = ["すべて", "待機中", "〆切未定", "〆切超過", "完了間近", "〆切迫る", "未着手", "着手済"]
+        opts = ["すべて", "〆切未定", "〆切超過", "完了間近", "〆切迫る", "未着手", "着手済"]
         status = st.selectbox("状態", opts, key="filter_status")
 
     filtered_df = df.copy()
@@ -99,13 +99,12 @@ def render_progress_table(df: pd.DataFrame):
         init(params) {
             const val = params.value || '';
             const colorMap = {
-                "待機中": "#4caf50", // Green
                 "〆切未定": "#000000", // Black
                 "〆切超過": "#f44336", // Red
                 "完了間近": "#0000ff", // Blue
                 "〆切迫る": "#ff9800", // Orange
                 "未着手": "#9e9e9e", // Gray
-                "着手済": "#03a9f4", // light blue
+                "着手済": "#4caf50", // Green
             };
             const c = colorMap[val] || "#9e9e9e";
             this.eGui = document.createElement('span');
