@@ -130,7 +130,7 @@ def render_progress_table(df: pd.DataFrame):
         theme="streamlit",
         allow_unsafe_jscode=True,
         fit_columns_on_grid_load=False,
-        update_mode=st_aggrid.GridUpdateMode.SELECTION_CHANGED,
+        update_on=["selectionChanged"],
         key="progress_table_aggrid",
     )
 
