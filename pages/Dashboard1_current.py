@@ -119,8 +119,8 @@ def render_progress_table(df: pd.DataFrame):
     gb.configure_default_column(resizable=True, sortable=True, filter=True)
     gb.configure_column("タスクID", width=200, pinned="left")
     gb.configure_column("タスク名", width=500, pinned="left")
-    gb.configure_column("状態", cellRenderer=status_renderer, width=200, pinned="left")
-    gb.configure_column("進捗率(%)", cellRenderer=progress_renderer, width=200, pinned="left")
+    gb.configure_column("状態", cellRenderer=status_renderer, width=250, pinned="left")
+    gb.configure_column("進捗率(%)", cellRenderer=progress_renderer, width=250, pinned="left")
     gb.configure_selection(selection_mode="single", use_checkbox=False)
 
     ret = st_aggrid.AgGrid(
@@ -129,7 +129,7 @@ def render_progress_table(df: pd.DataFrame):
         height=None, # auto height
         theme="streamlit",
         allow_unsafe_jscode=True,
-        fit_columns_on_grid_load=False,
+        fit_columns_on_grid_load=True,
         update_on=["selectionChanged"],
         key="progress_table_aggrid",
     )
