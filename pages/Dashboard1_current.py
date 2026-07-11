@@ -32,7 +32,7 @@ def render_kpi_cards(df: pd.DataFrame):
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Activeプロジェクトタスク数", f"{len(df)} 件")
-    c2.metric("残見込み総計", f"{df['残見込み(分)'].sum()/60:.1f} h")
+    c2.metric("補正後残り見込み時間総計", f"{df['補正後残り'].sum()/60:.1f} h")
     c3.metric("直近1週間〆切タスク数", f"{week_deadline} 件")
     c4.metric("待機中タスク数", f"{waiting_tasks} 件")
     return

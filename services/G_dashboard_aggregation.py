@@ -60,11 +60,17 @@ def build_active_task_summary_df() -> pd.DataFrame:
         estimated_total = task.sub_tasks["estimated_time"].sum()
         actual_total = task.sub_tasks["actual_time"].sum()
 
-        # 残時間算出（後で改善）
-        remaining = estimated_total - actual_total
+        # 残時間算出（未完了サブタスクの見込み時間合計）
+        estimated_remaining = incomplete_df["estimated_time"].sum()
 
-        # 進捗率算出（後で改善）
-        progress = actual_total / estimated_total * 100 if estimated_total > 0 else 0
+        # 補正後残り時間算出（完了済サブタスクの実績と見込みの乖離に応じて補正）
+        estimated_remaining_corrected = calculate_remaining_estimated_time(task_id)
+
+        # 補正後合計時間算出
+        estimated_total_corrected = actual_total + estimated_remaining_corrected
+
+        # 進捗率算出
+        progress = (estimated_total - estimated_remaining) / estimated_total * 100 if estimated_total > 0 else 0
 
         # 直近〆切算出（未完了サブタスクをサブタスク順序でソートし、最初の〆切日を取得）
         incomplete_df_sorted = incomplete_df.sort_values(by="sort_index")
@@ -81,15 +87,80 @@ def build_active_task_summary_df() -> pd.DataFrame:
             "PJ略": order_info.get_project_abbr(task.order_number),
             "オーダ略": order_info.get_order_abbr(task.order_number),
             "状態": _classify_task_status(task, today),
-            "残見込み(分)": remaining,
-            "総見込み(分)": estimated_total,
-            "実績合計(分)": actual_total,
-            "進捗率(%)": round(progress, 2),
+            "見込み残り": estimated_remaining,
+            "補正後残り": estimated_remaining_corrected,
+            "実績合計": actual_total,
+            "見込み合計": estimated_total,
+            "補正後合計": estimated_total_corrected,
+            "進捗率(%)": round(progress, 0),
             "未完了サブタスク数": len(incomplete_df),
             "直近〆切": next_deadline.strftime("%Y-%m-%d") if next_deadline is not None else None,
             "待機日": task.waiting_date if task.waiting_date is not None else None,
         })
     return pd.DataFrame(summary_data)
+
+
+def calculate_remaining_estimated_time(task_ID: str) -> int:
+    """タスクオブジェクト内の残見込み時間の合計を、完了済サブタスクの実績と見込みの乖離を考慮して計算する
+
+    Args:
+        task_ID (str): アクティブ状態のプロジェクトタスクまたはデイリータスクのタスクID
+
+    Returns:
+        int: 残見込み時間の合計（分単位）
+    """
+    # タスクIDに対応するタスクオブジェクトを取得する
+    # タスクIDの冒頭6文字がすべて数字ならProject/Active、そうでなければDaily/Active
+    if len(task_ID) >= 6 and task_ID[:6].isdigit():
+        folder_path = os.path.join("data", "Project", "Active")
+    else:
+        folder_path = os.path.join("data", "Daily", "Active")
+
+    # タスクとサブタスクを取得
+    task = Task_def.read_task_csv(os.path.join(folder_path, f"{task_ID}.csv"))
+    if task is None:
+        raise ValueError(f"タスクID '{task_ID}' が見つかりません")
+
+    # タスク全体の見込み時間合計を算出する
+    estimated_total = task.sub_tasks["estimated_time"].sum()
+
+    # 未完了サブタスクの見込み時間合計を算出する
+    incomplete_df = task.sub_tasks[task.sub_tasks["is_incomplete"] == True]
+    estimated_incomplete = incomplete_df["estimated_time"].sum()
+
+    # 完了済サブタスクの見込み時間合計を算出する（着手の有無に関わらず）
+    complete_df = task.sub_tasks[task.sub_tasks["is_incomplete"] == False]
+    estimated_complete = complete_df["estimated_time"].sum()
+
+    # 完了済サブタスクの見込み時間 / タスク全体の見込み時間 の比率を算出する
+    ratio_complete_weight = estimated_complete / estimated_total
+    print(f"ID: {task_ID}, estimated_total: {estimated_total}, estimated_incomplete: {estimated_incomplete}, estimated_complete: {estimated_complete}, ratio_complete_weight: {ratio_complete_weight}")
+
+    # 着手済かつ完了済のサブタスクのみを抽出
+    execute_complete_df = complete_df[complete_df["actual_time"] > 0]
+
+    # もし着手済の完了済サブタスクが存在しない場合は、ratio_paceを1とする
+    if execute_complete_df.empty:
+        return int(estimated_incomplete * ratio_complete_weight)
+
+    # 着手済かつ完了済サブタスクの見込み時間合計を算出する
+    estimated_execute_complete = execute_complete_df["estimated_time"].sum()
+
+    # 完了済サブタスクの実績時間合計を算出する
+    complete_actual = execute_complete_df["actual_time"].sum()
+
+    # 着手済かつ完了済サブタスクの実績時間 / 着手済かつ完了済サブタスクの見込み時間 の比率を算出し
+    # 1を引くことで、実績が見込みよりどれだけ乖離しているかを表す比率を算出する
+    # （0で見込み通り、正で実績が見込みより多い、負で実績が見込みより少ない）
+    ratio_pace = complete_actual / estimated_execute_complete - 1
+    print(f"ID: {task_ID}, complete_actual: {complete_actual}, complete_estimated: {estimated_execute_complete}, ratio_pace: {ratio_pace}")
+
+    # 比率同士を掛け算する
+    combined_ratio = ratio_complete_weight * ratio_pace
+
+    # 掛け算の結果を、未完了サブタスクの見込み時間合計に掛け算する
+    # これにより、完了済サブタスクの実績と見込みの乖離を考慮した残見込み時間の合計が算出される
+    return int(estimated_incomplete * (1 + combined_ratio))
 
 
 def _collect_all_active_tasks() -> dict[str, Task_def.Task]:
@@ -151,9 +222,10 @@ def _classify_task_status(
         if d_date is not None and (d_date - today).days < 0:
             return "〆切超過"
 
-    # 完了間近（未完了サブタスクの見込み時間合計が一定時間以内）
-    threshold_minute = 30  # 完了間近とみなす見込み時間の閾値（時間）
-    if incomplete_df["estimated_time"].sum() <= threshold_minute:
+    # 完了間近（未完了サブタスクの補正込み見込み時間合計が一定時間以内）
+    threshold_minute = 45  # 完了間近とみなす見込み時間の閾値（時間）
+    estimated_remaining_corrected = calculate_remaining_estimated_time(task.task_id)
+    if estimated_remaining_corrected <= threshold_minute:
         return "完了間近"
 
     # 〆切迫る（未完了にurgent_days以内の〆切がある）
