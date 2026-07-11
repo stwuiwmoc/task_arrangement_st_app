@@ -57,7 +57,7 @@ def render_filters(df: pd.DataFrame) -> pd.DataFrame:
         order = st.selectbox("オーダ略", opts, key="filter_order")
 
     with f3:
-        opts = ["すべて", "〆切未定", "〆切超過", "完了間近", "〆切迫る", "未着手", "着手済"]
+        opts = ["すべて", "待機中", "〆切未定", "〆切超過", "完了間近", "〆切迫る", "未着手", "着手済"]
         status = st.selectbox("状態", opts, key="filter_status")
 
     filtered_df = df.copy()
@@ -71,20 +71,118 @@ def render_filters(df: pd.DataFrame) -> pd.DataFrame:
     return filtered_df
 
 
+def render_progress_table(df: pd.DataFrame):
+    if df.empty:
+        st.warning("表示するタスクがありません。")
+        return
+
+    # 進捗率バー
+    progress_renderer = st_aggrid.JsCode("""
+    class ProgressBarRenderer {
+        init(params) {
+            const val = params.value || 0;
+            let color = '#4caf50';
+            if (val < 30) color = '#f44336';
+            else if (val < 70) color = '#ff9800';
+            this.eGui = document.createElement('div');
+            this.eGui.style.cssText = 'background:#eee;width:100%;height:20px;position:relative;border-radius:3px;';
+            this.eGui.innerHTML = '<div style="background:' + color + ';width:' + val + '%;height:100%;border-radius:3px;"></div>'
+                + '<div style="position:absolute;top:0;left:0;width:100%;text-align:center;line-height:20px;font-size:12px;font-weight:bold;color:#333;">' + val + '%</div>';
+        }
+        getGui() { return this.eGui; }
+    }
+    """)
+
+    # 状態バッジ
+    status_renderer = st_aggrid.JsCode("""
+    class StatusBadgeRenderer {
+        init(params) {
+            const val = params.value || '';
+            const colorMap = {
+                "待機中": "#4caf50", // Green
+                "〆切未定": "#000000", // Black
+                "〆切超過": "#f44336", // Red
+                "完了間近": "#0000ff", // Blue
+                "〆切迫る": "#ff9800", // Orange
+                "未着手": "#9e9e9e", // Gray
+                "着手済": "#03a9f4", // light blue
+            };
+            const c = colorMap[val] || "#9e9e9e";
+            this.eGui = document.createElement('span');
+            this.eGui.style.cssText = 'background:' + c + ';color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;';
+            this.eGui.innerText = val;
+        }
+        getGui() { return this.eGui; }
+    }
+    """)
+
+    gb = st_aggrid.GridOptionsBuilder.from_dataframe(df)
+    gb.configure_default_column(resizable=True, sortable=True, filter=True)
+    gb.configure_column("タスクID", width=200, pinned="left")
+    gb.configure_column("タスク名", width=500, pinned="left")
+    gb.configure_column("状態", cellRenderer=status_renderer, width=200, pinned="left")
+    gb.configure_column("進捗率(%)", cellRenderer=progress_renderer, width=200, pinned="left")
+    gb.configure_selection(selection_mode="single", use_checkbox=False)
+
+    ret = st_aggrid.AgGrid(
+        df,
+        gridOptions=gb.build(),
+        height=None, # auto height
+        theme="streamlit",
+        allow_unsafe_jscode=True,
+        fit_columns_on_grid_load=False,
+        update_mode=st_aggrid.GridUpdateMode.SELECTION_CHANGED,
+        key="progress_table_aggrid",
+    )
+
+    # 行選択→サイドバー反映
+    selected = ret.get("selected_rows")
+    if selected is not None:
+        if isinstance(selected, pd.DataFrame) and not selected.empty:
+            sel_row = selected.iloc[0]
+        elif isinstance(selected, list) and len(selected) > 0:
+            sel_row = selected[0]
+        else:
+            return
+
+        label = f"{sel_row['タスクID']}：{sel_row['タスク名']}"
+        if st.session_state.get("selected_task_label") != label:
+            st.session_state["selected_task_label"] = label
+            st.rerun()  # サイドバーのselectboxを更新するためにページをリロード
+
+    return
+
 if __name__ == "__main__":
     st.set_page_config(layout="wide")
     task_view.task_sidebar()
     st.markdown("#### 現状ダッシュボード")
 
     # Activeタスクの横断集計を取得
-    active_task_summary_df = Output_G.build_active_task_summary_df()
+    df_active = Output_G.build_active_task_summary_df()
 
-    if active_task_summary_df.empty:
+    if df_active.empty:
         st.warning("Activeタスクが存在しません。")
         st.stop()
 
     # KPIカードを表示
-    render_kpi_cards(active_task_summary_df)
+    render_kpi_cards(df_active)
 
     # フィルタを表示
-    df_filtered = render_filters(active_task_summary_df)
+    df_filtered = render_filters(df_active)
+
+    # タブ表示
+    tab_a, tab_b, tab_c = st.tabs([
+        "進捗テーブル",
+        "カンバンボード（未実装）",
+        "残見込みTreemap（未実装）"
+    ])
+
+    with tab_a:
+        st.caption(f"表示中：{len(df_filtered)} 件 / 全 {len(df_active)} 件")
+        render_progress_table(df_filtered)
+
+    with tab_b:
+        st.info("カンバンボードは未実装です。")
+
+    with tab_c:
+        st.info("残見込みTreemapは未実装です。")
