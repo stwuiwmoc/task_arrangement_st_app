@@ -134,7 +134,6 @@ def calculate_remaining_estimated_time(task_ID: str) -> int:
 
     # 完了済サブタスクの見込み時間 / タスク全体の見込み時間 の比率を算出する
     ratio_complete_weight = estimated_complete / estimated_total
-    print(f"ID: {task_ID}, estimated_total: {estimated_total}, estimated_incomplete: {estimated_incomplete}, estimated_complete: {estimated_complete}, ratio_complete_weight: {ratio_complete_weight}")
 
     # 着手済かつ完了済のサブタスクのみを抽出
     execute_complete_df = complete_df[complete_df["actual_time"] > 0]
@@ -153,7 +152,6 @@ def calculate_remaining_estimated_time(task_ID: str) -> int:
     # 1を引くことで、実績が見込みよりどれだけ乖離しているかを表す比率を算出する
     # （0で見込み通り、正で実績が見込みより多い、負で実績が見込みより少ない）
     ratio_pace = complete_actual / estimated_execute_complete - 1
-    print(f"ID: {task_ID}, complete_actual: {complete_actual}, complete_estimated: {estimated_execute_complete}, ratio_pace: {ratio_pace}")
 
     # 比率同士を掛け算する
     combined_ratio = ratio_complete_weight * ratio_pace
