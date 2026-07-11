@@ -81,9 +81,9 @@ def render_progress_table(df: pd.DataFrame):
     class ProgressBarRenderer {
         init(params) {
             const val = params.value || 0;
-            let color = '#4caf50';
-            if (val < 30) color = '#f44336';
-            else if (val < 70) color = '#ff9800';
+            let color = '#4caf50'; // Green
+            if (val < 40) color = '#f44336'; // Red
+            else if (val < 70) color = '#ffeb3b'; // Yellow
             this.eGui = document.createElement('div');
             this.eGui.style.cssText = 'background:#eee;width:100%;height:20px;position:relative;border-radius:3px;';
             this.eGui.innerHTML = '<div style="background:' + color + ';width:' + val + '%;height:100%;border-radius:3px;"></div>'
