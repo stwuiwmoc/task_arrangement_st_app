@@ -46,7 +46,12 @@ def render_kpi_cards(df: pd.DataFrame, include_mtg: bool, include_dsc: bool):
     return
 
 
-def render_trend_chart(monthly_df: pd.DataFrame, chart_mode: str) -> None:
+def render_trend_chart_absolute(monthly_df: pd.DataFrame) -> None:
+    """月次オーダ別の工数絶対値のトレンドを積み上げ棒グラフで表示する
+
+    Args:
+        monthly_df (pd.DataFrame): 月次データのDataFrame
+    """
     if monthly_df.empty:
         st.info("指定期間のデータがありません。")
         return
@@ -54,29 +59,45 @@ def render_trend_chart(monthly_df: pd.DataFrame, chart_mode: str) -> None:
     plot_df = monthly_df.copy()
     plot_df["ラベル"] = plot_df["オーダ略称"] + "(" + plot_df["区分"] + ")"
 
-    if chart_mode == "絶対量":
-        fig = px.bar(
-            plot_df.sort_values(by="年月"),
-            x="年月",
-            y="作業時間(h)",
-            color="ラベル",
-            barmode="stack",
-            title="月次 オーダ別工数（会議/議論/作業レイヤ）",
-            pattern_shape="区分",
-            pattern_shape_map={"作業": "", "会議": "/", "議論": "."},
-        )
-        fig.update_layout(yaxis_title="工数 (h)", legend_title="オーダ(区分)")
+    fig = px.bar(
+        plot_df.sort_values(by="年月"),
+        x="年月",
+        y="作業時間(h)",
+        color="ラベル",
+        barmode="stack",
+        title="月次 オーダ別工数（会議/議論/作業レイヤ）",
+        pattern_shape="区分",
+        pattern_shape_map={"作業": "", "会議": "/", "議論": "."},
+    )
+    fig.update_layout(yaxis_title="工数 (h)", legend_title="オーダ(区分)")
 
-    else:  # 構成比
-        fig = px.area(
-            plot_df.sort_values(by="年月"),
-            x="年月",
-            y="作業時間(h)",
-            color="ラベル",
-            groupnorm="percent",
-            title="月次 オーダ配分推移（100%積み上げ）",
-        )
-        fig.update_layout(yaxis_title="構成比 (%)", legend_title="オーダ(区分)")
+    fig.update_layout(height=500, hovermode="x unified", legend=dict(orientation="v"))
+    st.plotly_chart(fig, width="stretch")
+    return
+
+
+def render_trend_chart_rate(monthly_df: pd.DataFrame) -> None:
+    """月次オーダ別の工数構成比率のトレンドを積み上げ面グラフで表示する
+
+    Args:
+        monthly_df (pd.DataFrame): 月次データのDataFrame
+    """
+    if monthly_df.empty:
+        st.info("指定期間のデータがありません。")
+        return
+
+    plot_df = monthly_df.copy()
+    plot_df["ラベル"] = plot_df["オーダ略称"] + "(" + plot_df["区分"] + ")"
+
+    fig = px.area(
+        plot_df.sort_values(by="年月"),
+        x="年月",
+        y="作業時間(h)",
+        color="ラベル",
+        groupnorm="percent",
+        title="月次 オーダ配分推移（100%積み上げ）",
+    )
+    fig.update_layout(yaxis_title="構成比 (%)", legend_title="オーダ(区分)")
 
     fig.update_layout(height=500, hovermode="x unified", legend=dict(orientation="v"))
     st.plotly_chart(fig, width="stretch")
@@ -155,7 +176,10 @@ if __name__ == "__main__":
     with tab_a:
         chart_mode = st.radio("表示モード", ["絶対量", "構成比"], horizontal=True, key="chart_mode_history")
         monthly_df = Output_G.aggregate_monthly_by_order(worklog_df, include_mtg, include_dsc)
-        render_trend_chart(monthly_df, chart_mode)
+        if chart_mode == "絶対量":
+            render_trend_chart_absolute(monthly_df)
+        else:
+            render_trend_chart_rate(monthly_df)
 
         render_summary_table(monthly_df)
 
