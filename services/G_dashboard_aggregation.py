@@ -237,3 +237,90 @@ def _classify_task_status(
         return "未着手"
 
     return "着手済"  # 上記どれにも該当しない場合は単に着手済とみなす
+
+
+# -------------------------------------------------------------
+# 工数実績集約(ダッシュボード3-A用)
+# -------------------------------------------------------------
+
+def load_worklogs_in_period(start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    """指定期間の全工数実績csvを結合し、作業区分の列を追加
+
+    Args:
+        start_date (datetime): 開始日
+        end_date (datetime): 終了日
+
+    Returns:
+        pd.DataFrame: 指定期間の工数実績csvを結合したDataFrame
+    """
+
+    all_files = []
+    for folder in ["data/WorkLogs", "data/WorkLogs/old"]:
+        if os.path.exists(folder):
+            all_files.extend(glob.glob(os.path.join(folder, "工数実績*.csv")))
+
+    dfs = []
+    for path in all_files:
+        fname = os.path.basename(path)
+        try:
+            date_str = fname.replace("工数実績", "").replace(".csv", "")
+            file_date = datetime.strptime(date_str, "%y%m%d").date()
+
+        except ValueError:
+            continue  # ファイル名が想定外の形式の場合はスキップ
+
+        if not (start_date.date() <= file_date <= end_date.date()):
+            continue  # 指定期間外のファイルはスキップ
+
+        try:
+            df = pd.read_csv(path, parse_dates=["開始時刻", "終了時刻"])
+            df["ファイル日付"] = file_date
+            dfs.append(df)
+        except Exception:
+            continue  # CSV読み込みに失敗した場合はスキップ
+
+    if not dfs:
+        return pd.DataFrame()  # データがない場合は空のDataFrameを返す
+
+    combined = pd.concat(dfs, ignore_index=True)
+    combined["開始時刻"] = pd.to_datetime(combined["開始時刻"].dt.floor("min"))
+    combined["終了時刻"] = pd.to_datetime(combined["終了時刻"].dt.floor("min"))
+    combined["作業時間(分)"] = (
+        (combined["終了時刻"] - combined["開始時刻"]).dt.total_seconds() / 60
+    ).astype(int)
+
+    # 作業区分判定：タスクIDが"MTG"で始まるものを会議、"DSC"で始まるものを議論、それ以外を作業とする
+    combined["区分"] = combined["タスクID"].apply(
+        lambda x: "会議" if str(x).startswith("MTG") else ("議論" if str(x).startswith("DSC") else "作業"))
+
+    combined["年月"] = pd.to_datetime(combined["ファイル日付"]).dt.strftime("%Y-%m")
+
+    return combined
+
+
+def aggregate_monthly_by_order(
+        worklog_df: pd.DataFrame, include_mtg: bool = True, include_dsc: bool = True
+        ) -> pd.DataFrame:
+    """月×オーダ略×区分での工数集計
+
+    Args:
+        worklog_df (pd.DataFrame): 工数実績のDataFrame
+        include_mtg (bool, optional): 会議を含めるかどうか。デフォルトはTrue。
+        include_dsc (bool, optional): 議論を含めるかどうか。デフォルトはTrue。
+
+    Returns:
+        pd.DataFrame: 月×オーダ略×区分で集計したDataFrame
+    """
+
+    if worklog_df.empty:
+        return pd.DataFrame()
+
+    df = worklog_df.copy()
+    if not include_mtg:
+        df = df[df["区分"] != "会議"]
+    if not include_dsc:
+        df = df[df["区分"] != "議論"]
+    grouped = df.groupby(["年月", "オーダ略称", "区分"])["作業時間(分)"].sum().reset_index()
+    grouped["作業時間(h)"] = (grouped["作業時間(分)"] / 60).round(1)
+
+    return grouped
