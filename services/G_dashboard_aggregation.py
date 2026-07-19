@@ -58,7 +58,7 @@ def build_active_task_summary_df() -> pd.DataFrame:
         incomplete_df = task.sub_tasks[task.sub_tasks["is_incomplete"] == True]
 
         estimated_total = task.sub_tasks["estimated_time"].sum()
-        actual_total = task.sub_tasks["actual_time"].sum()
+        actual_completed_total = task.sub_tasks[task.sub_tasks["is_incomplete"] == False]["actual_time"].sum()
 
         # 残時間算出（未完了サブタスクの見込み時間合計）
         estimated_remaining = incomplete_df["estimated_time"].sum()
@@ -67,7 +67,7 @@ def build_active_task_summary_df() -> pd.DataFrame:
         estimated_remaining_corrected = calculate_remaining_estimated_time(task_id)
 
         # 補正後合計時間算出
-        estimated_total_corrected = actual_total + estimated_remaining_corrected
+        estimated_total_corrected = actual_completed_total + estimated_remaining_corrected
 
         # 進捗率算出
         progress = (estimated_total - estimated_remaining) / estimated_total * 100 if estimated_total > 0 else 0
@@ -89,7 +89,7 @@ def build_active_task_summary_df() -> pd.DataFrame:
             "状態": _classify_task_status(task, today),
             "見込み残り": estimated_remaining,
             "補正後残り": estimated_remaining_corrected,
-            "実績合計": actual_total,
+            "完了済実績合計": actual_completed_total,
             "見込み合計": estimated_total,
             "補正後合計": estimated_total_corrected,
             "進捗率(%)": round(progress, 0),
