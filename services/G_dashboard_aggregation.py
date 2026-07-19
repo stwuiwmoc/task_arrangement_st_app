@@ -102,6 +102,7 @@ def build_active_task_summary_df() -> pd.DataFrame:
 
 def calculate_remaining_estimated_time(task_ID: str) -> int:
     """タスクオブジェクト内の残見込み時間の合計を、完了済サブタスクの実績と見込みの乖離を考慮して計算する
+    サブID "#000" は除外して計算するが、サブID #000 しかない場合は、#000 の見込み時間を残見込み時間として返す
 
     Args:
         task_ID (str): アクティブ状態のプロジェクトタスクまたはデイリータスクのタスクID
@@ -121,15 +122,23 @@ def calculate_remaining_estimated_time(task_ID: str) -> int:
     if task is None:
         raise ValueError(f"タスクID '{task_ID}' が見つかりません")
 
+    # サブタスクID "#000" は除外して処理する
+    sub_tasks = task.sub_tasks[task.sub_tasks["subtask_id"] != "#000"]
+
+    # "#000" 以外のサブタスクが存在しない場合は、"#000" の見込み時間をそのまま返す
+    if sub_tasks.empty:
+        row_000 = task.sub_tasks[task.sub_tasks["subtask_id"] == "#000"]
+        return int(row_000["estimated_time"].sum())
+
     # タスク全体の見込み時間合計を算出する
-    estimated_total = task.sub_tasks["estimated_time"].sum()
+    estimated_total = sub_tasks["estimated_time"].sum()
 
     # 未完了サブタスクの見込み時間合計を算出する
-    incomplete_df = task.sub_tasks[task.sub_tasks["is_incomplete"] == True]
+    incomplete_df = sub_tasks[sub_tasks["is_incomplete"] == True]
     estimated_incomplete = incomplete_df["estimated_time"].sum()
 
     # 完了済サブタスクの見込み時間合計を算出する（着手の有無に関わらず）
-    complete_df = task.sub_tasks[task.sub_tasks["is_incomplete"] == False]
+    complete_df = sub_tasks[sub_tasks["is_incomplete"] == False]
     estimated_complete = complete_df["estimated_time"].sum()
 
     # 完了済サブタスクの見込み時間 / タスク全体の見込み時間 の比率を算出する
