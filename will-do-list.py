@@ -225,9 +225,10 @@ def get_incomplete_subtasks_df(task_id: str) -> pd.DataFrame | None:
         .sort_values("sort_index")
         .reset_index(drop=True)
     )
-    return incomplete_df[["subtask_id", "estimated_time", "name"]].rename(columns={
+    return incomplete_df[["subtask_id", "estimated_time", "actual_time", "name"]].rename(columns={
         "subtask_id": "サブID",
         "estimated_time": "見込",
+        "actual_time": "実績",
         "name": "サブタスク名",
     })
 
