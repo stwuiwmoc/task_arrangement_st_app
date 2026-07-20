@@ -55,10 +55,20 @@ def build_active_task_summary_df() -> pd.DataFrame:
 
     summary_data = []
     for task_id, task in tasks.items():
-        incomplete_df = task.sub_tasks[task.sub_tasks["is_incomplete"] == True]
+        # #000を除いたサブタスクを基準に処理する
+        non_000_df = task.sub_tasks[task.sub_tasks["subtask_id"] != "#000"]
+        is_000_only = non_000_df.empty
 
-        estimated_total = task.sub_tasks["estimated_time"].sum()
-        actual_completed_total = task.sub_tasks[task.sub_tasks["is_incomplete"] == False]["actual_time"].sum()
+        incomplete_df = non_000_df[non_000_df["is_incomplete"] == True]
+
+        # #000を除いた見込み時間合計
+        estimated_total = non_000_df["estimated_time"].sum()
+
+        # 完了済実績合計: #000のみの場合は完了済サブタスクなしとして扱う
+        if is_000_only:
+            actual_completed_total = 0
+        else:
+            actual_completed_total = non_000_df[non_000_df["is_incomplete"] == False]["actual_time"].sum()
 
         # 残時間算出（未完了サブタスクの見込み時間合計）
         estimated_remaining = incomplete_df["estimated_time"].sum()
@@ -81,6 +91,13 @@ def build_active_task_summary_df() -> pd.DataFrame:
                 next_deadline = d_date
                 break
 
+        # 未完了サブタスク数: #000のみの場合は#000も計上する
+        incomplete_count = (
+            len(task.sub_tasks[task.sub_tasks["is_incomplete"] == True])
+            if is_000_only
+            else len(incomplete_df)
+        )
+
         summary_data.append({
             "タスクID": task_id,
             "タスク名": task.name,
@@ -93,7 +110,7 @@ def build_active_task_summary_df() -> pd.DataFrame:
             "見込み合計": estimated_total,
             "補正後合計": estimated_total_corrected,
             "進捗率(%)": round(progress, 0),
-            "未完了サブタスク数": len(incomplete_df),
+            "未完了サブタスク数": incomplete_count,
             "直近〆切": next_deadline.strftime("%Y-%m-%d") if next_deadline is not None else None,
             "待機日": task.waiting_date if task.waiting_date is not None else None,
         })
@@ -207,7 +224,7 @@ def _classify_task_status(
         task: Task_def.Task,
         today: datetime.date,
         urgent_days: int = 2) -> str:
-    """タスクの状態を[〆切未定,〆切超過,完了間近,〆切迫る,未着手,着手済]に分類する
+    """タスクの状態を[段取り中,〆切未定,〆切超過,完了間近,〆切迫る,未着手,着手済]に分類する
 
     Args:
         task (Task_def.Task): Taskオブジェクト
@@ -217,7 +234,13 @@ def _classify_task_status(
     Returns:
         str: タスクの状態を表す文字列
     """
-    incomplete_df = task.sub_tasks[task.sub_tasks["is_incomplete"] == True]
+    # #000を除いたサブタスク・未完了サブタスクを基準に分類する
+    non_000_df = task.sub_tasks[task.sub_tasks["subtask_id"] != "#000"]
+    incomplete_df = non_000_df[non_000_df["is_incomplete"] == True]
+
+    # 段取り中（サブタスクが#000のみで、かつそのサブタスクが未完了の場合）
+    if non_000_df.empty and task.sub_tasks["is_incomplete"].any():
+        return "段取り中"
 
     # 〆切未定（未完了サブタスクのすべてで〆切未設定）
     if incomplete_df["deadline_date"].apply(_parse_date_str).isna().all():
@@ -241,8 +264,8 @@ def _classify_task_status(
         if d_date is not None and 0 <= (d_date - today).days <= urgent_days:
             return "〆切迫る"
 
-    # 未着手（サブタスク実績時間合計が0）
-    if incomplete_df["actual_time"].sum() == 0:
+    # 未着手（#000を除いたサブタスク実績時間合計が0）
+    if non_000_df["actual_time"].sum() == 0:
         return "未着手"
 
     return "着手済"  # 上記どれにも該当しない場合は単に着手済とみなす
