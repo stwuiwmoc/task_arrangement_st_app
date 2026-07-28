@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
     # 後でsidebar連携に修正
     period_key = st.selectbox(
-        "表示期間",["1M", "3M", "6M", "1Y"])
+        "表示期間", ["1M", "3M", "6M", "1Y"], index=2)
 
     start_date, end_date = Output_G.get_period_range(period_key)
 
