@@ -115,14 +115,14 @@ def render_summary_table(monthly_df: pd.DataFrame) -> None:
         return
 
     pivot = monthly_df.pivot_table(
-        index="年月",
-        columns=["オーダ略称", "区分"],
+        index=["オーダ略称", "区分"],
+        columns="年月",
         values="作業時間(h)",
         aggfunc="sum",
         fill_value=0,
     )
-    pivot["月合計"] = pivot.sum(axis=1)
-    data_cols = [c for c in pivot.columns if c[0] != "月合計"]
+    pivot["合計"] = pivot.sum(axis=1)
+    data_cols = [c for c in pivot.columns if c != "合計"]
     styled = (
         pivot.style
         .format("{:.1f}")
