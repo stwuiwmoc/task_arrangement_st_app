@@ -86,7 +86,7 @@ def _build_chart_common_kwargs(order_sort: list[str]) -> dict:
         "pattern_shape": "区分",
         "pattern_shape_map": _PATTERN_SHAPE_MAP,
         "category_orders": {
-            "オーダ略称": order_sort,
+            "オーダ略称": list(reversed(order_sort)),
             "区分": _KUBUN_ORDER,
         },
     }
@@ -112,7 +112,7 @@ def render_trend_chart_absolute(monthly_df: pd.DataFrame, order_sort: list[str])
         **_build_chart_common_kwargs(order_sort),
     )
     fig.update_layout(yaxis_title="工数 (h)", legend_title="オーダ(区分)")
-    fig.update_layout(height=500, hovermode="x unified", legend=dict(orientation="v"))
+    fig.update_layout(height=500, hovermode="x unified", legend=dict(orientation="v", traceorder="reversed"))
     st.plotly_chart(fig, width="stretch")
     return
 
@@ -137,7 +137,7 @@ def render_trend_chart_rate(monthly_df: pd.DataFrame, order_sort: list[str]) -> 
         **_build_chart_common_kwargs(order_sort),
     )
     fig.update_layout(yaxis_title="構成比 (%)", legend_title="オーダ(区分)")
-    fig.update_layout(height=500, hovermode="x unified", legend=dict(orientation="v"))
+    fig.update_layout(height=500, hovermode="x unified", legend=dict(orientation="v", traceorder="reversed"))
     st.plotly_chart(fig, width="stretch")
     return
 
