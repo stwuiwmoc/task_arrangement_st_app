@@ -33,8 +33,13 @@ def get_period_range(
 
     if base_date is None:
         base_date = Task_def.get_ESS_dt()
-
-    end_date = base_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        # base_dateなしの場合、end_dateを本日を含む月の最終日に設定する
+        next_month_first = base_date.replace(day=1) + timedelta(days=32)
+        end_date = next_month_first.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        ) - timedelta(seconds=1)
+    else:
+        end_date = base_date.replace(hour=23, minute=59, second=59, microsecond=999999)
     delta_map = {"1M": 30, "3M": 90, "6M": 180, "1Y": 365}
     start_date = end_date - timedelta(days=delta_map.get(period_key, 30))
     return start_date, end_date
@@ -324,3 +329,33 @@ def aggregate_monthly_by_order(
     grouped["作業時間(h)"] = (grouped["作業時間(分)"] / 60).round(1)
 
     return grouped
+
+
+def get_order_abbr_sort_order() -> list[str]:
+    """オーダ管理CSVの並び順に基づくオーダ略称の順序リストを返す
+
+    並び順:
+    1. オーダ管理.csv の「間接」以外
+    2. オーダ管理_old.csv の「間接」以外
+    3. オーダ管理.csv の「間接」
+    4. オーダ管理_old.csv の「間接」
+
+    Returns:
+        list[str]: オーダ略称の順序リスト
+    """
+    old_csv = os.path.join("data", "オーダ管理_old.csv")
+    df_new = Task_def.OrderInformation().df
+    df_old = (
+        Task_def.OrderInformation(csv_path=old_csv).df
+        if os.path.exists(old_csv)
+        else pd.DataFrame(columns=df_new.columns)
+    )
+
+    ordered = pd.concat([
+        df_new[df_new["project_abbr"] != "間接"],
+        df_old[df_old["project_abbr"] != "間接"],
+        df_new[df_new["project_abbr"] == "間接"],
+        df_old[df_old["project_abbr"] == "間接"],
+    ], ignore_index=True)
+
+    return ordered["order_abbr"].tolist()
