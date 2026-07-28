@@ -329,3 +329,33 @@ def aggregate_monthly_by_order(
     grouped["作業時間(h)"] = (grouped["作業時間(分)"] / 60).round(1)
 
     return grouped
+
+
+def get_order_abbr_sort_order() -> list[str]:
+    """オーダ管理CSVの並び順に基づくオーダ略称の順序リストを返す
+
+    並び順:
+    1. オーダ管理.csv の「間接」以外
+    2. オーダ管理_old.csv の「間接」以外
+    3. オーダ管理.csv の「間接」
+    4. オーダ管理_old.csv の「間接」
+
+    Returns:
+        list[str]: オーダ略称の順序リスト
+    """
+    old_csv = os.path.join("data", "オーダ管理_old.csv")
+    df_new = Task_def.OrderInformation().df
+    df_old = (
+        Task_def.OrderInformation(csv_path=old_csv).df
+        if os.path.exists(old_csv)
+        else pd.DataFrame(columns=df_new.columns)
+    )
+
+    ordered = pd.concat([
+        df_new[df_new["project_abbr"] != "間接"],
+        df_old[df_old["project_abbr"] != "間接"],
+        df_new[df_new["project_abbr"] == "間接"],
+        df_old[df_old["project_abbr"] == "間接"],
+    ], ignore_index=True)
+
+    return ordered["order_abbr"].tolist()

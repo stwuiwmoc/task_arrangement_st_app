@@ -46,11 +46,12 @@ def render_kpi_cards(df: pd.DataFrame, include_mtg: bool, include_dsc: bool):
     return
 
 
-def render_trend_chart_absolute(monthly_df: pd.DataFrame) -> None:
+def render_trend_chart_absolute(monthly_df: pd.DataFrame, order_sort: list[str]) -> None:
     """月次オーダ別の工数絶対値のトレンドを積み上げ棒グラフで表示する
 
     Args:
         monthly_df (pd.DataFrame): 月次データのDataFrame
+        order_sort (list[str]): オーダ略称の表示順序リスト
     """
     if monthly_df.empty:
         st.info("指定期間のデータがありません。")
@@ -58,6 +59,9 @@ def render_trend_chart_absolute(monthly_df: pd.DataFrame) -> None:
 
     plot_df = monthly_df.copy()
     plot_df["ラベル"] = plot_df["オーダ略称"] + "(" + plot_df["区分"] + ")"
+
+    _KUBUN_ORDER = ["作業", "会議", "議論"]
+    ordered_labels = [f"{a}({k})" for a in order_sort for k in _KUBUN_ORDER]
 
     fig = px.bar(
         plot_df.sort_values(by="年月"),
@@ -68,6 +72,7 @@ def render_trend_chart_absolute(monthly_df: pd.DataFrame) -> None:
         title="月次 オーダ別工数（会議/議論/作業レイヤ）",
         pattern_shape="区分",
         pattern_shape_map={"作業": "", "会議": "/", "議論": "."},
+        category_orders={"ラベル": ordered_labels},
     )
     fig.update_layout(yaxis_title="工数 (h)", legend_title="オーダ(区分)")
 
@@ -76,11 +81,12 @@ def render_trend_chart_absolute(monthly_df: pd.DataFrame) -> None:
     return
 
 
-def render_trend_chart_rate(monthly_df: pd.DataFrame) -> None:
+def render_trend_chart_rate(monthly_df: pd.DataFrame, order_sort: list[str]) -> None:
     """月次オーダ別の工数構成比率のトレンドを積み上げ面グラフで表示する
 
     Args:
         monthly_df (pd.DataFrame): 月次データのDataFrame
+        order_sort (list[str]): オーダ略称の表示順序リスト
     """
     if monthly_df.empty:
         st.info("指定期間のデータがありません。")
@@ -89,6 +95,9 @@ def render_trend_chart_rate(monthly_df: pd.DataFrame) -> None:
     plot_df = monthly_df.copy()
     plot_df["ラベル"] = plot_df["オーダ略称"] + "(" + plot_df["区分"] + ")"
 
+    _KUBUN_ORDER = ["作業", "会議", "議論"]
+    ordered_labels = [f"{a}({k})" for a in order_sort for k in _KUBUN_ORDER]
+
     fig = px.area(
         plot_df.sort_values(by="年月"),
         x="年月",
@@ -96,6 +105,7 @@ def render_trend_chart_rate(monthly_df: pd.DataFrame) -> None:
         color="ラベル",
         groupnorm="percent",
         title="月次 オーダ配分推移（100%積み上げ）",
+        category_orders={"ラベル": ordered_labels},
     )
     fig.update_layout(yaxis_title="構成比 (%)", legend_title="オーダ(区分)")
 
@@ -104,11 +114,12 @@ def render_trend_chart_rate(monthly_df: pd.DataFrame) -> None:
     return
 
 
-def render_summary_table(monthly_df: pd.DataFrame) -> None:
+def render_summary_table(monthly_df: pd.DataFrame, order_sort: list[str]) -> None:
     """月次オーダ別区分別のピボットテーブルを表示する
 
     Args:
         monthly_df (pd.DataFrame): 月次データのDataFrame
+        order_sort (list[str]): オーダ略称の表示順序リスト
     """
     if monthly_df.empty:
         st.info("指定期間のデータがありません。")
@@ -121,6 +132,13 @@ def render_summary_table(monthly_df: pd.DataFrame) -> None:
         aggfunc="sum",
         fill_value=0,
     )
+    # order_sort に基づいて行を並べ替え
+    _KUBUN_ORDER = ["作業", "会議", "議論"]
+    ordered_idx = [
+        (a, k) for a in order_sort for k in _KUBUN_ORDER if (a, k) in pivot.index
+    ]
+    if ordered_idx:
+        pivot = pivot.loc[ordered_idx]
     pivot["合計"] = pivot.sum(axis=1)
     data_cols = [c for c in pivot.columns if c != "合計"]
     styled = (
@@ -176,12 +194,13 @@ if __name__ == "__main__":
     with tab_a:
         chart_mode = st.radio("表示モード", ["絶対量", "構成比"], horizontal=True, key="chart_mode_history")
         monthly_df = Output_G.aggregate_monthly_by_order(worklog_df, include_mtg, include_dsc)
+        order_sort = Output_G.get_order_abbr_sort_order()
         if chart_mode == "絶対量":
-            render_trend_chart_absolute(monthly_df)
+            render_trend_chart_absolute(monthly_df, order_sort)
         else:
-            render_trend_chart_rate(monthly_df)
+            render_trend_chart_rate(monthly_df, order_sort)
 
-        render_summary_table(monthly_df)
+        render_summary_table(monthly_df, order_sort)
 
     with tab_b:
         st.info("見込み vs 実績は未実装です。")
