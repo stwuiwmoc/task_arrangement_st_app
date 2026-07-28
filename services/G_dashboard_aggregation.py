@@ -33,8 +33,13 @@ def get_period_range(
 
     if base_date is None:
         base_date = Task_def.get_ESS_dt()
-
-    end_date = base_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        # base_dateなしの場合、end_dateを本日を含む月の最終日に設定する
+        next_month_first = base_date.replace(day=1) + timedelta(days=32)
+        end_date = next_month_first.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        ) - timedelta(seconds=1)
+    else:
+        end_date = base_date.replace(hour=23, minute=59, second=59, microsecond=999999)
     delta_map = {"1M": 30, "3M": 90, "6M": 180, "1Y": 365}
     start_date = end_date - timedelta(days=delta_map.get(period_key, 30))
     return start_date, end_date
