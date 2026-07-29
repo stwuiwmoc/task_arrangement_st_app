@@ -69,110 +69,134 @@ def _generate_order_colors(order_sort: list[str]) -> dict[str, str]:
     return result
 
 
-def _build_chart_common_kwargs(order_sort: list[str]) -> dict:
+def _enrich_monthly_df(monthly_df: pd.DataFrame, order_df: pd.DataFrame) -> pd.DataFrame:
+    """monthly_dfにPJ略とラベル（PJ略 オーダ略称）列を追加して返す"""
+    df = monthly_df.merge(order_df, on="オーダ略称", how="left")
+    df["ラベル"] = df["PJ略"] + " " + df["オーダ略称"]
+    return df
+
+
+def _build_chart_common_kwargs(order_df: pd.DataFrame) -> dict:
     """棒グラフ・面グラフ共通のPlotlyキーワード引数を返す
 
     色はオーダ単位（黄金比分散）、パターンは区分単位で表現する。
+    凡例テキストは「PJ略 オーダ略称」形式。
 
     Args:
-        order_sort (list[str]): オーダ略称の順序リスト
+        order_df (pd.DataFrame): ["PJ略", "オーダ略称"] 列を持つ順序付きDataFrame
 
     Returns:
         dict: plotly.express に渡す共通キーワード引数
     """
+    label_list = [
+        f"{row['PJ略']} {row['オーダ略称']}" for _, row in order_df.iterrows()
+    ]
     return {
-        "color": "オーダ略称",
-        "color_discrete_map": _generate_order_colors(order_sort),
+        "color": "ラベル",
+        "color_discrete_map": _generate_order_colors(label_list),
         "pattern_shape": "区分",
         "pattern_shape_map": _PATTERN_SHAPE_MAP,
         "category_orders": {
-            "オーダ略称": list(reversed(order_sort)),
+            "ラベル": list(reversed(label_list)),
             "区分": _KUBUN_ORDER,
         },
     }
 
 
-def render_trend_chart_absolute(monthly_df: pd.DataFrame, order_sort: list[str]) -> None:
+def render_trend_chart_absolute(monthly_df: pd.DataFrame, order_df: pd.DataFrame) -> None:
     """月次オーダ別の工数絶対値のトレンドを積み上げ棒グラフで表示する
 
     Args:
         monthly_df (pd.DataFrame): 月次データのDataFrame
-        order_sort (list[str]): オーダ略称の表示順序リスト
+        order_df (pd.DataFrame): ["PJ略", "オーダ略称"] 列を持つ順序付きDataFrame
     """
     if monthly_df.empty:
         st.info("指定期間のデータがありません。")
         return
 
+    enriched_df = _enrich_monthly_df(monthly_df, order_df)
     fig = px.bar(
-        monthly_df.sort_values(by="年月"),
+        enriched_df.sort_values(by="年月"),
         x="年月",
         y="作業時間(h)",
         barmode="stack",
         title="月次 オーダ別工数（会議/議論/作業レイヤ）",
-        **_build_chart_common_kwargs(order_sort),
+        **_build_chart_common_kwargs(order_df),
     )
-    fig.update_layout(yaxis_title="工数 (h)", legend_title="オーダ(区分)")
+    fig.update_layout(yaxis_title="工数 (h)", legend_title="PJ略 オーダ(区分)")
     fig.update_layout(height=500, hovermode="x unified", legend=dict(orientation="v", traceorder="reversed"))
     st.plotly_chart(fig, width="stretch")
     return
 
 
-def render_trend_chart_rate(monthly_df: pd.DataFrame, order_sort: list[str]) -> None:
+def render_trend_chart_rate(monthly_df: pd.DataFrame, order_df: pd.DataFrame) -> None:
     """月次オーダ別の工数構成比率のトレンドを積み上げ面グラフで表示する
 
     Args:
         monthly_df (pd.DataFrame): 月次データのDataFrame
-        order_sort (list[str]): オーダ略称の表示順序リスト
+        order_df (pd.DataFrame): ["PJ略", "オーダ略称"] 列を持つ順序付きDataFrame
     """
     if monthly_df.empty:
         st.info("指定期間のデータがありません。")
         return
 
+    enriched_df = _enrich_monthly_df(monthly_df, order_df)
     fig = px.area(
-        monthly_df.sort_values(by="年月"),
+        enriched_df.sort_values(by="年月"),
         x="年月",
         y="作業時間(h)",
         groupnorm="percent",
         title="月次 オーダ配分推移（100%積み上げ）",
-        **_build_chart_common_kwargs(order_sort),
+        **_build_chart_common_kwargs(order_df),
     )
-    fig.update_layout(yaxis_title="構成比 (%)", legend_title="オーダ(区分)")
+    fig.update_layout(yaxis_title="構成比 (%)", legend_title="PJ略 オーダ(区分)")
     fig.update_layout(height=500, hovermode="x unified", legend=dict(orientation="v", traceorder="reversed"))
     st.plotly_chart(fig, width="stretch")
     return
 
 
-def render_summary_table(monthly_df: pd.DataFrame, order_sort: list[str]) -> None:
+def render_summary_table(monthly_df: pd.DataFrame, order_df: pd.DataFrame) -> None:
     """月次オーダ別区分別のピボットテーブルを表示する
 
     Args:
         monthly_df (pd.DataFrame): 月次データのDataFrame
-        order_sort (list[str]): オーダ略称の表示順序リスト
+        order_df (pd.DataFrame): ["PJ略", "オーダ略称"] 列を持つ順序付きDataFrame
     """
     if monthly_df.empty:
         st.info("指定期間のデータがありません。")
         return
 
-    pivot = monthly_df.pivot_table(
-        index=["オーダ略称", "区分"],
+    enriched_df = _enrich_monthly_df(monthly_df, order_df)
+    pivot = enriched_df.pivot_table(
+        index=["PJ略", "オーダ略称", "区分"],
         columns="年月",
         values="作業時間(h)",
         aggfunc="sum",
         fill_value=0,
     )
-    # order_sort に基づいて行を並べ替え
+    # order_df に基づいて行を並べ替え
     ordered_idx = [
-        (a, k) for a in order_sort for k in _KUBUN_ORDER if (a, k) in pivot.index
+        (row["PJ略"], row["オーダ略称"], k)
+        for _, row in order_df.iterrows()
+        for k in _KUBUN_ORDER
+        if (row["PJ略"], row["オーダ略称"], k) in pivot.index
     ]
     if ordered_idx:
         pivot = pivot.loc[ordered_idx]
     pivot["合計"] = pivot.sum(axis=1)
 
-    # reset_index して「オーダ略称」を通常列にし、スタイル対象にする
+    # reset_index してPJ略・オーダ略称を通常列にし、スタイル対象にする
     pivot_display = pivot.reset_index()
     ym_cols = [c for c in pivot.columns if c != "合計"]
     num_cols = ym_cols + ["合計"]
-    order_colors = _generate_order_colors(order_sort)
+    label_list = [
+        f"{row['PJ略']} {row['オーダ略称']}" for _, row in order_df.iterrows()
+    ]
+    color_map_by_label = _generate_order_colors(label_list)
+    abbr_to_color = {
+        row["オーダ略称"]: color_map_by_label[f"{row['PJ略']} {row['オーダ略称']}"]
+        for _, row in order_df.iterrows()
+    }
     styled = (
         pivot_display.style
         .hide(axis="index")
@@ -180,8 +204,8 @@ def render_summary_table(monthly_df: pd.DataFrame, order_sort: list[str]) -> Non
         .background_gradient(cmap="YlOrRd", subset=ym_cols, axis=None)
         .map(lambda v: "background-color: white" if v == 0 else "", subset=num_cols)
         .map(
-            lambda v: f"background-color: {order_colors.get(v, '')}; color: white"
-            if order_colors.get(v) else "",
+            lambda v: f"background-color: {abbr_to_color.get(v, '')}; color: white"
+            if abbr_to_color.get(v) else "",
             subset=["オーダ略称"],
         )
     )
@@ -233,13 +257,13 @@ if __name__ == "__main__":
     with tab_a:
         chart_mode = st.radio("表示モード", ["絶対量", "構成比"], horizontal=True, key="chart_mode_history")
         monthly_df = Output_G.aggregate_monthly_by_order(worklog_df, include_mtg, include_dsc)
-        order_sort = Output_G.get_order_abbr_sort_order()
+        order_df = Output_G.get_order_sort_df()
         if chart_mode == "絶対量":
-            render_trend_chart_absolute(monthly_df, order_sort)
+            render_trend_chart_absolute(monthly_df, order_df)
         else:
-            render_trend_chart_rate(monthly_df, order_sort)
+            render_trend_chart_rate(monthly_df, order_df)
 
-        render_summary_table(monthly_df, order_sort)
+        render_summary_table(monthly_df, order_df)
 
     with tab_b:
         st.info("見込み vs 実績は未実装です。")

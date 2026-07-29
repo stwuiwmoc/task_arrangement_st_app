@@ -331,17 +331,14 @@ def aggregate_monthly_by_order(
     return grouped
 
 
-def get_order_abbr_sort_order() -> list[str]:
-    """オーダ管理CSVの並び順に基づくオーダ略称の順序リストを返す
+def get_order_sort_df() -> pd.DataFrame:
+    """オーダ管理CSVを結合・ソートしたオーダ情報DataFrameを返す
 
-    並び順:
-    1. オーダ管理.csv の「間接」以外
-    2. オーダ管理_old.csv の「間接」以外
-    3. オーダ管理.csv の「間接」
-    4. オーダ管理_old.csv の「間接」
+    並び順: 「間接」PJ略を最後に、その他はPJ略→オーダ略称の昇順。
+    重複するオーダ略称はオーダ管理.csvを優先する。
 
     Returns:
-        list[str]: オーダ略称の順序リスト
+        pd.DataFrame: ["PJ略", "オーダ略称"] の列を持つDataFrame
     """
     old_csv = os.path.join("data", "オーダ管理_old.csv")
     df_new = Task_def.OrderInformation().df
@@ -351,11 +348,23 @@ def get_order_abbr_sort_order() -> list[str]:
         else pd.DataFrame(columns=df_new.columns)
     )
 
-    ordered = pd.concat([
-        df_new[df_new["project_abbr"] != "間接"],
-        df_old[df_old["project_abbr"] != "間接"],
-        df_new[df_new["project_abbr"] == "間接"],
-        df_old[df_old["project_abbr"] == "間接"],
-    ], ignore_index=True)
+    combined = pd.concat([df_new, df_old], ignore_index=True).drop_duplicates(
+        subset=["order_abbr"], keep="first"
+    )
+    combined["_is_indirect"] = combined["project_abbr"] == "間接"
+    combined = combined.sort_values(
+        ["_is_indirect", "project_abbr", "order_abbr"]
+    ).drop(columns=["_is_indirect"])
 
-    return ordered["order_abbr"].tolist()
+    return combined[["project_abbr", "order_abbr"]].rename(
+        columns={"project_abbr": "PJ略", "order_abbr": "オーダ略称"}
+    ).reset_index(drop=True)
+
+
+def get_order_abbr_sort_order() -> list[str]:
+    """オーダ略称の順序リストを返す（get_order_sort_dfに委譲）
+
+    Returns:
+        list[str]: オーダ略称の順序リスト
+    """
+    return get_order_sort_df()["オーダ略称"].tolist()
