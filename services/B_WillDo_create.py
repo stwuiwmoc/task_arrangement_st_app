@@ -472,11 +472,18 @@ def ID_to_WillDoEntry(task_id: str, subtask_id: str) -> Task_def.WillDoEntry:
             d += timedelta(days=1)
 
         if days_left is not None and days_left <= 1:
-            # 〆切日までの日数が1以下の場合は、合算時間の2倍を一日当たり作業時間目安とする
-            estimated_time_per_day = round(estimated_time_sum / 0.5, 0)
+            # 〆切日までの日数が1以下の場合は、
+            # 残り1日時点=〆切日当日で合算時間の1.5倍
+            # それ以降は一日経過ごとに合算時間の半分が増えていくように計算する
+            estimated_time_per_day = round(
+                (-0.5 * estimated_time_sum) * days_left + 2 * estimated_time_sum,
+                0)
         else:
-            # そうでない場合は、合算時間を〆切日までの日数で割った値を一日当たり作業時間目安とする
-            estimated_time_per_day = round(estimated_time_sum / (days_left - 0.5), 0)
+            # そうでない場合は、合算時間を(〆切日までの日数-1)で割った値を一日当たり作業時間目安とする
+            # 残り2日（〆切日前日）時点で、1日当たり作業時間=合算時間ぴったりとなる
+            estimated_time_per_day = round(
+                estimated_time_sum / (days_left - 1),
+                0)
 
     else:
         # 〆切日を持つサブタスクが存在しない場合
@@ -484,9 +491,10 @@ def ID_to_WillDoEntry(task_id: str, subtask_id: str) -> Task_def.WillDoEntry:
         nearest_subtask_id = None
 
         # 残りのサブタスク全ての（見込み時間）を合算して2倍を一日当たり作業時間目安とする
-        estimated_time_per_day = round((
-            filtered_subtasks_df["estimated_time"]
-        ).sum() / 0.5, 0) if not filtered_subtasks_df.empty else 0
+        estimated_time_per_day = round(
+            (filtered_subtasks_df["estimated_time"]).sum() / 0.5,
+            0
+            ) if not filtered_subtasks_df.empty else 0
 
     # WillDoEntryオブジェクトを生成して返す
     return Task_def.WillDoEntry(
