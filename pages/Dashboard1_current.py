@@ -99,11 +99,12 @@ def render_progress_table(df: pd.DataFrame):
         init(params) {
             const val = params.value || '';
             const colorMap = {
+                "段取り中": "#9e9e9e", // Gray
                 "〆切未定": "#000000", // Black
                 "〆切超過": "#f44336", // Red
                 "完了間近": "#0000ff", // Blue
                 "〆切迫る": "#ff9800", // Orange
-                "未着手": "#9e9e9e", // Gray
+                "未着手": "#ffeb3b", // Yellow
                 "着手済": "#4caf50", // Green
             };
             const c = colorMap[val] || "#9e9e9e";
