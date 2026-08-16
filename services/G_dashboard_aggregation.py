@@ -164,9 +164,10 @@ def calculate_remaining_estimated_time(task_ID: str) -> int:
     # 着手済かつ完了済のサブタスクのみを抽出
     execute_complete_df = complete_df[complete_df["actual_time"] > 0]
 
-    # もし着手済の完了済サブタスクが存在しない場合は、ratio_paceを1とする
+    # もし着手済の完了済サブタスクが存在しない場合は、補正値算出のための情報が無いので補正計算のしようが無い
+    # 補正は行わずに未完了サブタスクの見込み時間合計をそのまま返す
     if execute_complete_df.empty:
-        return int(estimated_incomplete * ratio_complete_weight)
+        return int(estimated_incomplete)
 
     # 着手済かつ完了済サブタスクの見込み時間合計を算出する
     estimated_execute_complete = execute_complete_df["estimated_time"].sum()
