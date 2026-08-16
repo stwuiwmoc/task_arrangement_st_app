@@ -80,7 +80,7 @@ def build_active_task_summary_df() -> pd.DataFrame:
         estimated_total_corrected = actual_completed_total + estimated_remaining_corrected
 
         # 進捗率算出
-        progress = (estimated_total - estimated_remaining) / estimated_total * 100 if estimated_total > 0 else 0
+        progress = (estimated_total - estimated_remaining_corrected) / estimated_total * 100 if estimated_total > 0 else 0
 
         # 直近〆切算出（未完了サブタスクをサブタスク順序でソートし、最初の〆切日を取得）
         incomplete_df_sorted = incomplete_df.sort_values(by="sort_index")
