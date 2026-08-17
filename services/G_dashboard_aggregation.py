@@ -13,6 +13,7 @@ import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models.Task_definition as Task_def
+import services.E_WorkLog_formatting as Output_E
 
 # -------------------------------------------------------------
 # 期間フィルタ
@@ -21,26 +22,31 @@ import models.Task_definition as Task_def
 def get_period_range(
         period_key: str, base_date: Optional[datetime] = None,
     ) -> tuple[datetime, datetime]:
-    """期間キー（1M, 3M, 6M, 1Y）から期間の開始日と終了日を返す
+    """期間キー（1W, 1M, 3M, 6M, 1Y）から期間の開始日と終了日を返す
 
     Args:
-        period_key (str): 期間キー（1M, 3M, 6M, 1Y）
-        base_date (Optional[datetime], optional): 基準日。指定しない場合は現在日時を使用。 Defaults to None.
+        period_key (str): 期間キー（1W, 1M, 3M, 6M, 1Y）
+        base_date (Optional[datetime], optional): 基準日。指定しない場合は、1wなら本日、それ以外なら本日を含む月の最終日
 
     Returns:
         tuple[datetime, datetime]: 期間の開始日と終了日
     """
 
     if base_date is None:
-        base_date = Task_def.get_ESS_dt()
-        # base_dateなしの場合、end_dateを本日を含む月の最終日に設定する
-        next_month_first = base_date.replace(day=1) + timedelta(days=32)
-        end_date = next_month_first.replace(
-            day=1, hour=0, minute=0, second=0, microsecond=0
-        ) - timedelta(seconds=1)
+        if period_key == "1W":
+            # base_dateなしで1wの場合、end_dateは本日に設定する
+            end_date = Task_def.get_ESS_dt()
+
+        else:
+            # base_dateなしで1W以外の場合、end_dateを本日を含む月の最終日に設定する
+            base_date = Task_def.get_ESS_dt()
+            next_month_first = base_date.replace(day=1) + timedelta(days=32)
+            end_date = next_month_first.replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            ) - timedelta(seconds=1)
     else:
         end_date = base_date.replace(hour=23, minute=59, second=59, microsecond=999999)
-    delta_map = {"1M": 30, "3M": 90, "6M": 180, "1Y": 365}
+    delta_map = {"1W": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365}
     start_date = end_date - timedelta(days=delta_map.get(period_key, 30))
     return start_date, end_date
 
@@ -311,9 +317,42 @@ def load_worklogs_in_period(start_date: datetime, end_date: datetime) -> pd.Data
             continue  # 指定期間外のファイルはスキップ
 
         try:
+            # ZZZ-1050（工数切り捨て分調整）の算出処理
+            # オーダ番号列がZZZ-1050の行が存在する場合は工数を取得し、存在しない場合は0を設定
+            other = "ZZZ-1050"
+
+            df_sum_by_order = Output_E.sum_df_each_order(
+                Output_E.sum_df_each_subtask(
+                    path, include_MTG=True))
+            other_work_time = df_sum_by_order.loc[df_sum_by_order["オーダ番号"] == other, "工数"].sum()
+
+            # 結合用の工数実績csvの読み込み
             df = pd.read_csv(path, parse_dates=["開始時刻", "終了時刻"])
             df["ファイル日付"] = file_date
+
+            # dfの先頭行に工数切り捨て分調整の行を追加する
+            if other_work_time > 0:
+                # 開始時刻は5:00、終了時刻は5:00 + 工数切り捨て分調整の時間（分）を設定する
+                other_start_time = pd.Timestamp.combine(file_date, pd.Timestamp("05:00").time())
+                other_end_time = other_start_time + pd.to_timedelta(other_work_time, unit="m")
+
+                new_row = {
+                    "オーダ番号": other,
+                    "オーダ略称": Task_def.OrderInformation().get_order_abbr(other),
+                    "プロジェクト略称": Task_def.OrderInformation().get_project_abbr(other),
+                    "タスクID": "ZZZ1050",
+                    "サブタスクID": "#000",
+                    "タスク名": "工数切り捨て分調整",
+                    "サブタスク名": "",
+                    "開始時刻": other_start_time,
+                    "終了時刻": other_end_time,
+                    "ファイル日付": file_date,
+                }
+                df = pd.concat([pd.DataFrame([new_row]), df], ignore_index=True)
+
+            # dfのリストに追加する
             dfs.append(df)
+
         except Exception:
             continue  # CSV読み込みに失敗した場合はスキップ
 
@@ -331,23 +370,27 @@ def load_worklogs_in_period(start_date: datetime, end_date: datetime) -> pd.Data
     combined["区分"] = combined["タスクID"].apply(
         lambda x: "会議" if str(x).startswith("MTG") else ("議論" if str(x).startswith("DSC") else "作業"))
 
-    combined["年月"] = pd.to_datetime(combined["ファイル日付"]).dt.strftime("%Y-%m")
+    combined["年月のみ"] = pd.to_datetime(combined["ファイル日付"]).dt.strftime("%Y-%m")
+    combined["年月日"] = pd.to_datetime(combined["ファイル日付"]).dt.strftime("%Y-%m-%d")
+    _dt = pd.to_datetime(combined["ファイル日付"])
+    combined["年週"] = (_dt - pd.to_timedelta(_dt.dt.dayofweek, unit="D")).dt.strftime("%Y-%m-%d～")
 
     return combined
 
 
-def aggregate_monthly_by_order(
-        worklog_df: pd.DataFrame, include_mtg: bool = True, include_dsc: bool = True
+def aggregate_by_order(
+        worklog_df: pd.DataFrame, granularity: str, include_mtg: bool = True, include_dsc: bool = True
         ) -> pd.DataFrame:
-    """月×オーダ略×区分での工数集計
+    """日/週/月 × オーダ略 × 区分での工数集計
 
     Args:
         worklog_df (pd.DataFrame): 工数実績のDataFrame
+        granularity (str): 集計粒度。"daily" / "weekly" / "monthly" のいずれか。
         include_mtg (bool, optional): 会議を含めるかどうか。デフォルトはTrue。
         include_dsc (bool, optional): 議論を含めるかどうか。デフォルトはTrue。
 
     Returns:
-        pd.DataFrame: 月×オーダ略×区分で集計したDataFrame
+        pd.DataFrame: 日/週/月 × オーダ略 × 区分で集計したDataFrame
     """
 
     if worklog_df.empty:
@@ -358,8 +401,19 @@ def aggregate_monthly_by_order(
         df = df[df["区分"] != "会議"]
     if not include_dsc:
         df = df[df["区分"] != "議論"]
-    grouped = df.groupby(["年月", "オーダ略称", "区分"])["作業時間(分)"].sum().reset_index()
-    grouped["作業時間(h)"] = (grouped["作業時間(分)"] / 60).round(1)
+
+    if granularity == "monthly":
+        grouped = df.groupby(["年月のみ", "オーダ略称", "区分"])["作業時間(分)"].sum().reset_index()
+        grouped["作業時間(h)"] = (grouped["作業時間(分)"] / 60).round(1)
+        grouped = grouped.rename(columns={"年月のみ": "区間"})
+    elif granularity == "weekly":
+        grouped = df.groupby(["年週", "オーダ略称", "区分"])["作業時間(分)"].sum().reset_index()
+        grouped["作業時間(h)"] = (grouped["作業時間(分)"] / 60).round(1)
+        grouped = grouped.rename(columns={"年週": "区間"})
+    else:  # daily
+        grouped = df.groupby(["年月日", "オーダ略称", "区分"])["作業時間(分)"].sum().reset_index()
+        grouped["作業時間(h)"] = (grouped["作業時間(分)"] / 60).round(1)
+        grouped = grouped.rename(columns={"年月日": "区間"})
 
     return grouped
 
