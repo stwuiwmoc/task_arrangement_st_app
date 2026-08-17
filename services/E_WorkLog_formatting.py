@@ -150,14 +150,40 @@ def sum_df_each_order(
         '名前': lambda x: '  \n'.join(x),
     })
 
-    # 4. 時間列をint型に変換
-    df_sum_order['実時間'] = df_sum_order['実時間'].astype(int)
-
-    # 5. 時間列を15分単位で切り捨てた「工数」列を作成
+    # 4. 時間列を15分単位で切り捨てた「工数」列を作成
     df_truncated = df_sum_order.copy()
     df_truncated['工数'] = (df_truncated['実時間'] // 15) * 15
 
-    # 6. オーダ番号列で再度ソート
+    # 5. 実時間列の合計-オーダ番号=ZZZ-1050 以外の工数列の合計を計算
+    total_real_time = df_truncated['実時間'].sum()
+    total_work_time = df_truncated[df_truncated['オーダ番号'] != 'ZZZ-1050']['工数'].sum()
+    other_real_time = total_real_time - total_work_time
+    other_work_time = (other_real_time // 15) * 15
+
+    # 6. オーダ番号=ZZZ-1050 の行が存在する場合は、その行の実時間列と工数列を上書きする
+    # ※オーダ番号=ZZZ-1050 の行が存在しない場合は、新規に行を追加する
+    if 'ZZZ-1050' in df_truncated['オーダ番号'].values:
+        df_truncated.loc[df_truncated['オーダ番号'] == 'ZZZ-1050', ['実時間', '工数', '名前']] = {
+            '工数': int(other_work_time),
+            '実時間': int(other_real_time),
+            '名前': 'その他'
+        }
+    else:
+        df_truncated = pd.concat([
+            df_truncated,
+            pd.DataFrame([{
+                'オーダ番号': 'ZZZ-1050',
+                '名前': '工数15分切り捨て分',
+                '実時間': int(other_real_time),
+                '工数': int(other_work_time)
+            }])
+        ], ignore_index=True)
+
+    # 7. 時間列をint型に変換
+    df_truncated['実時間'] = df_truncated['実時間'].astype(int)
+    df_truncated['工数'] = df_truncated['工数'].astype(int)
+
+    # 8. オーダ番号列で再度ソート
     # ※ソート順は、OrderInformation().df["order_number"]の順番に従う
     df_truncated_sorted = df_truncated.sort_values(
         by=['オーダ番号'],
