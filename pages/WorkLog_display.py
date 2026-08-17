@@ -40,9 +40,7 @@ if __name__ == "__main__":
         df_sum_subtask_withoutMTG = Output_E.sum_df_each_subtask(WorkLog_filepath, include_MTG=False)
         df_sum_order_withMTG = Output_E.sum_df_each_order(df_sum_subtask_withMTG)
         df_sum_order_withoutMTG = Output_E.sum_df_each_order(df_sum_subtask_withoutMTG)
-        direct_indirect_ratio = Output_E.calc_direct_indirect_ratio(df_sum_order_withMTG)
-        summary_df = Output_E.calc_WorkLog_summary(
-            WorkLog_filepath, df_sum_order_withMTG, add_daytime_break, direct_indirect_ratio)
+        summary_df = Output_E.calc_WorkLog_summary(WorkLog_filepath, df_sum_order_withMTG, add_daytime_break)
 
         # 表示
         # インデックスで降順ソートして表示
