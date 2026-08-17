@@ -311,44 +311,45 @@ def load_worklogs_in_period(start_date: datetime, end_date: datetime) -> pd.Data
         if not (start_date.date() <= file_date <= end_date.date()):
             continue  # 指定期間外のファイルはスキップ
 
-        # try:
-        # ZZZ-1050（工数切り捨て分調整）の算出処理
-        # オーダ番号列がZZZ-1050の行が存在する場合は工数を取得し、存在しない場合は0を設定
-        other = "ZZZ-1050"
+        try:
+            # ZZZ-1050（工数切り捨て分調整）の算出処理
+            # オーダ番号列がZZZ-1050の行が存在する場合は工数を取得し、存在しない場合は0を設定
+            other = "ZZZ-1050"
 
-        df_sum_by_order = Output_E.sum_df_each_order(
-            Output_E.sum_df_each_subtask(
-                path, include_MTG=True))
-        other_work_time = df_sum_by_order.loc[df_sum_by_order["オーダ番号"] == other, "工数"].sum()
+            df_sum_by_order = Output_E.sum_df_each_order(
+                Output_E.sum_df_each_subtask(
+                    path, include_MTG=True))
+            other_work_time = df_sum_by_order.loc[df_sum_by_order["オーダ番号"] == other, "工数"].sum()
 
-        # 結合用の工数実績csvの読み込み
-        df = pd.read_csv(path, parse_dates=["開始時刻", "終了時刻"])
-        df["ファイル日付"] = file_date
+            # 結合用の工数実績csvの読み込み
+            df = pd.read_csv(path, parse_dates=["開始時刻", "終了時刻"])
+            df["ファイル日付"] = file_date
 
-        # dfの先頭行に工数切り捨て分調整の行を追加する
-        if other_work_time > 0:
-            # 開始時刻は5:00、終了時刻は5:00 + 工数切り捨て分調整の時間（分）を設定する
-            other_start_time = pd.Timestamp.combine(file_date, pd.Timestamp("05:00").time())
-            other_end_time = other_start_time + pd.to_timedelta(other_work_time, unit="m")
+            # dfの先頭行に工数切り捨て分調整の行を追加する
+            if other_work_time > 0:
+                # 開始時刻は5:00、終了時刻は5:00 + 工数切り捨て分調整の時間（分）を設定する
+                other_start_time = pd.Timestamp.combine(file_date, pd.Timestamp("05:00").time())
+                other_end_time = other_start_time + pd.to_timedelta(other_work_time, unit="m")
 
-            new_row = {
-                "オーダ番号": other,
-                "オーダ略称": Task_def.OrderInformation().get_order_abbr(other),
-                "プロジェクト略称": Task_def.OrderInformation().get_project_abbr(other),
-                "タスクID": "ZZZ1050",
-                "サブタスクID": "#000",
-                "タスク名": "工数切り捨て分調整",
-                "サブタスク名": "",
-                "開始時刻": other_start_time,
-                "終了時刻": other_end_time,
-                "ファイル日付": file_date,
-            }
-            df = pd.concat([pd.DataFrame([new_row]), df], ignore_index=True)
+                new_row = {
+                    "オーダ番号": other,
+                    "オーダ略称": Task_def.OrderInformation().get_order_abbr(other),
+                    "プロジェクト略称": Task_def.OrderInformation().get_project_abbr(other),
+                    "タスクID": "ZZZ1050",
+                    "サブタスクID": "#000",
+                    "タスク名": "工数切り捨て分調整",
+                    "サブタスク名": "",
+                    "開始時刻": other_start_time,
+                    "終了時刻": other_end_time,
+                    "ファイル日付": file_date,
+                }
+                df = pd.concat([pd.DataFrame([new_row]), df], ignore_index=True)
 
+            # dfのリストに追加する
             dfs.append(df)
 
-        # except Exception:
-        #     continue  # CSV読み込みに失敗した場合はスキップ
+        except Exception:
+            continue  # CSV読み込みに失敗した場合はスキップ
 
     if not dfs:
         return pd.DataFrame()  # データがない場合は空のDataFrameを返す
