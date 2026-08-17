@@ -57,6 +57,9 @@ def render_kpi_cards(df: pd.DataFrame, include_mtg: bool, include_dsc: bool):
 
 _KUBUN_ORDER = ["作業", "会議", "議論"]
 _PATTERN_SHAPE_MAP = {"作業": "", "会議": "/", "議論": "."}
+_GRANULARITY_LABEL = {"daily": "日次", "weekly": "週次", "monthly": "月次"}
+# period_key → 集計粒度のマッピング
+_PERIOD_GRANULARITY = {"1W": "daily", "1M": "weekly"}
 
 
 def _generate_order_colors(order_sort: list[str]) -> dict[str, str]:
@@ -111,54 +114,50 @@ def _build_chart_common_kwargs(order_df: pd.DataFrame) -> dict:
     }
 
 
-def render_trend_chart_absolute(monthly_df: pd.DataFrame, order_df: pd.DataFrame) -> None:
-    """月次オーダ別の工数絶対値のトレンドを積み上げ棒グラフで表示する
-
-    Args:
-        monthly_df (pd.DataFrame): 月次データのDataFrame
-        order_df (pd.DataFrame): ["PJ略", "オーダ略称"] 列を持つ順序付きDataFrame
-    """
+def render_trend_chart_absolute(monthly_df: pd.DataFrame, order_df: pd.DataFrame, granularity: str = "monthly") -> None:
+    """オーダ別工数絶対値のトレンドを積み上げ棒グラフで表示する"""
     if monthly_df.empty:
         st.info("指定期間のデータがありません。")
         return
 
     enriched_df = _enrich_monthly_df(monthly_df, order_df)
+    label = _GRANULARITY_LABEL.get(granularity, "月次")
     fig = px.bar(
-        enriched_df.sort_values(by="年月"),
-        x="年月",
+        enriched_df.sort_values(by="区間"),
+        x="区間",
         y="作業時間(h)",
         barmode="stack",
-        title="月次 オーダ別工数（会議/議論/作業レイヤ）",
+        title=f"{label} オーダ別工数（会議/議論/作業レイヤ）",
         **_build_chart_common_kwargs(order_df),
     )
     fig.update_layout(yaxis_title="工数 (h)", legend_title="PJ略 オーダ(区分)")
     fig.update_layout(height=500, hovermode="x unified", legend=dict(orientation="v", traceorder="reversed"))
+    sorted_intervals = sorted(enriched_df["区間"].unique().tolist())
+    fig.update_xaxes(type="category", categoryorder="array", categoryarray=sorted_intervals)
     st.plotly_chart(fig, width="stretch")
     return
 
 
-def render_trend_chart_rate(monthly_df: pd.DataFrame, order_df: pd.DataFrame) -> None:
-    """月次オーダ別の工数構成比率のトレンドを積み上げ面グラフで表示する
-
-    Args:
-        monthly_df (pd.DataFrame): 月次データのDataFrame
-        order_df (pd.DataFrame): ["PJ略", "オーダ略称"] 列を持つ順序付きDataFrame
-    """
+def render_trend_chart_rate(monthly_df: pd.DataFrame, order_df: pd.DataFrame, granularity: str = "monthly") -> None:
+    """オーダ別工数構成比率のトレンドを積み上げ面グラフで表示する"""
     if monthly_df.empty:
         st.info("指定期間のデータがありません。")
         return
 
     enriched_df = _enrich_monthly_df(monthly_df, order_df)
+    label = _GRANULARITY_LABEL.get(granularity, "月次")
     fig = px.area(
-        enriched_df.sort_values(by="年月"),
-        x="年月",
+        enriched_df.sort_values(by="区間"),
+        x="区間",
         y="作業時間(h)",
         groupnorm="percent",
-        title="月次 オーダ配分推移（100%積み上げ）",
+        title=f"{label} オーダ配分推移（100%積み上げ）",
         **_build_chart_common_kwargs(order_df),
     )
     fig.update_layout(yaxis_title="構成比 (%)", legend_title="PJ略 オーダ(区分)")
     fig.update_layout(height=500, hovermode="x unified", legend=dict(orientation="v", traceorder="reversed"))
+    sorted_intervals = sorted(enriched_df["区間"].unique().tolist())
+    fig.update_xaxes(type="category", categoryorder="array", categoryarray=sorted_intervals)
     st.plotly_chart(fig, width="stretch")
     return
 
@@ -177,7 +176,7 @@ def render_summary_table(monthly_df: pd.DataFrame, order_df: pd.DataFrame) -> No
     enriched_df = _enrich_monthly_df(monthly_df, order_df)
     pivot = enriched_df.pivot_table(
         index=["PJ略", "オーダ略称", "区分"],
-        columns="年月",
+        columns="区間",
         values="作業時間(h)",
         aggfunc="sum",
         fill_value=0,
@@ -228,9 +227,11 @@ if __name__ == "__main__":
 
     # 後でsidebar連携に修正
     period_key = st.selectbox(
-        "表示期間", ["1M", "3M", "6M", "1Y"], index=2)
+        "表示期間", ["1W", "1M", "3M", "6M", "1Y"], index=0)
 
     start_date, end_date = Output_G.get_period_range(period_key)
+    granularity = _PERIOD_GRANULARITY.get(period_key, "monthly")
+    print(granularity, start_date, end_date)
 
     c1, c2, c3 = st.columns([3, 1, 1])
     with c1:
@@ -253,8 +254,6 @@ if __name__ == "__main__":
     render_kpi_cards(worklog_df, include_mtg, include_dsc)
     st.markdown("---")
 
-
-
     tab_a, tab_b, tab_c, tab_d = st.tabs([
         "工数トレンド",
         "見込み vs 実績（未実装）",
@@ -263,15 +262,16 @@ if __name__ == "__main__":
     ])
 
     with tab_a:
-        chart_mode = st.radio("表示モード", ["絶対量", "構成比"], horizontal=True, key="chart_mode_history")
-        monthly_df = Output_G.aggregate_monthly_by_order(worklog_df, include_mtg, include_dsc)
+        chart_mode = st.radio("表示モード", ["構成比", "絶対量"], horizontal=True, key="chart_mode_history")
+        aggregated_df = Output_G.aggregate_by_order(worklog_df, granularity=granularity, include_mtg=include_mtg, include_dsc=include_dsc)
         order_df = Output_G.get_order_sort_df()
-        if chart_mode == "絶対量":
-            render_trend_chart_absolute(monthly_df, order_df)
-        else:
-            render_trend_chart_rate(monthly_df, order_df)
 
-        render_summary_table(monthly_df, order_df)
+        if chart_mode == "絶対量":
+            render_trend_chart_absolute(aggregated_df, order_df, granularity)
+        else:
+            render_trend_chart_rate(aggregated_df, order_df, granularity)
+
+        render_summary_table(aggregated_df, order_df)
 
     with tab_b:
         st.info("見込み vs 実績は未実装です。")
