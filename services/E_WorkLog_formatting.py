@@ -155,15 +155,18 @@ def sum_df_each_order(
     df_truncated['工数'] = (df_truncated['実時間'] // 15) * 15
 
     # 5. 実時間列の合計-オーダ番号=ZZZ-1050 以外の工数列の合計を計算
+    other = "ZZZ-1050"
+
     total_real_time = df_truncated['実時間'].sum()
-    total_work_time = df_truncated[df_truncated['オーダ番号'] != 'ZZZ-1050']['工数'].sum()
-    other_real_time = total_real_time - total_work_time
-    other_work_time = (other_real_time // 15) * 15
+    order_real_time = df_truncated[df_truncated['オーダ番号'] != other]['実時間'].sum()
+    order_work_time = df_truncated[df_truncated['オーダ番号'] != other]['工数'].sum()
+    other_real_time = total_real_time - order_real_time
+    other_work_time = (total_real_time // 15 * 15) - order_work_time
 
     # 6. オーダ番号=ZZZ-1050 の行が存在する場合は、その行の実時間列と工数列を上書きする
     # ※オーダ番号=ZZZ-1050 の行が存在しない場合は、新規に行を追加する
-    if 'ZZZ-1050' in df_truncated['オーダ番号'].values:
-        df_truncated.loc[df_truncated['オーダ番号'] == 'ZZZ-1050', ['実時間', '工数', '名前']] = {
+    if other in df_truncated['オーダ番号'].values:
+        df_truncated.loc[df_truncated['オーダ番号'] == other, ['実時間', '工数', '名前']] = {
             '工数': int(other_work_time),
             '実時間': int(other_real_time),
             '名前': 'その他'
@@ -172,7 +175,7 @@ def sum_df_each_order(
         df_truncated = pd.concat([
             df_truncated,
             pd.DataFrame([{
-                'オーダ番号': 'ZZZ-1050',
+                'オーダ番号': other,
                 '名前': '工数15分切り捨て分',
                 '実時間': int(other_real_time),
                 '工数': int(other_work_time)
@@ -218,7 +221,7 @@ def calc_direct_indirect_ratio(df_sum_order: pd.DataFrame) -> float:
     total_work_time = df['工数'].sum()
     if total_work_time == 0:
         return 0.0
-    return round(direct_work_time / total_work_time, 1)
+    return direct_work_time / total_work_time
 
 
 def convert_df_for_display(
