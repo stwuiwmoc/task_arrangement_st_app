@@ -193,6 +193,34 @@ def sum_df_each_order(
     return df_truncated_sorted
 
 
+def calc_direct_indirect_ratio(df_sum_order: pd.DataFrame) -> float:
+    """
+    直接工数と間接工数の比率を計算する。
+
+    Args:
+        df_sum_order (pd.DataFrame): オーダ番号ごとの集計データフレーム
+
+    Returns:
+        float: 直接工数と間接工数の比率（直接工数 / 総工数）
+    """
+    # 1. dfのオーダ番号列をキーにしてOrderInformation()から各行のPJ略を取得する
+    order_info = Task_def.OrderInformation()
+    order_abbr_map = order_info.df.set_index("order_number")["project_abbr"]
+
+    # 2. dfにPJ略列を追加する
+    df = df_sum_order.copy()
+    df['PJ略'] = df['オーダ番号'].map(order_abbr_map).fillna('')
+
+    # 3. PJ略列が"間接"以外行の工数を合計する
+    direct_work_time = df[df['PJ略'] != '間接']['工数'].sum()
+
+    # 4. "間接"以外の工数列の合計 / 工数列の合計 として比率を計算する
+    total_work_time = df['工数'].sum()
+    if total_work_time == 0:
+        return 0.0
+    return round(direct_work_time / total_work_time, 1)
+
+
 def convert_df_for_display(
         df: pd.DataFrame, sort: bool)-> pd.DataFrame:
 
@@ -212,7 +240,11 @@ def convert_df_for_display(
     return df_display
 
 
-def calc_WorkLog_summary(csv_filepath: str, df_truncated: pd.DataFrame, add_daytime_break: bool) -> pd.DataFrame:
+def calc_WorkLog_summary(
+        csv_filepath: str,
+        df_truncated: pd.DataFrame,
+        add_daytime_break: bool,
+        direct_indirect_ratio: float) -> pd.DataFrame:
     # 1. CSVファイルの全ての行・列をdataframeとして読み込む
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
     df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
@@ -229,9 +261,7 @@ def calc_WorkLog_summary(csv_filepath: str, df_truncated: pd.DataFrame, add_dayt
 
     # 4. dfから実時間合計と工数合計を取得して実働時間の15分切り捨てを計算
     total_real_minutes = df_truncated['実時間'].sum()
-    total_work_minutes = df_truncated['工数'].sum()
     total_real_minutes_truncated = (total_real_minutes // 15) * 15
-    others_minutes = total_real_minutes_truncated - total_work_minutes
 
 
     # 5. 昼休憩を除く休憩時間を計算
@@ -244,13 +274,13 @@ def calc_WorkLog_summary(csv_filepath: str, df_truncated: pd.DataFrame, add_dayt
     # 6. 表示用のdfを作成
     # 6-1. 各種時間をフォーマット変換して辞書に格納
     output_dict = {
+        "直間比率": f"{(direct_indirect_ratio*100):.1f} %",
         "ESS始業": earliest_start.strftime("%H:%M"),
         "ESS終業": latest_end.strftime("%H:%M"),
         "ESS滞在": _format_minutes_to_hours_minutes(total_stay_minutes),
         "ESS休憩": _format_minutes_to_hours_minutes(total_break_minutes),
         "ESS実働": _format_minutes_to_hours_minutes(total_real_minutes),
         "BJP合計": _format_minutes_to_hours_minutes(total_real_minutes_truncated),
-        "BJPその他": _format_minutes_to_hours_minutes(others_minutes),
     }
 
     # 6-2. 辞書のkeysを列名、valuesをデータとしてDataFrameを作成
