@@ -22,24 +22,32 @@ def render_kpi_cards(df: pd.DataFrame, include_mtg: bool, include_dsc: bool):
     """
     if df.empty:
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("期間内総工数", "0 h")
+        c1.metric("直間比率", "-")
         c2.metric("平均日次工数", "0 h/日")
         c3.metric("会議比率", "-")
         c4.metric("議論比率", "-")
         return
 
     src = df if include_mtg and include_dsc else df[df["区分"].isin(["作業"] if not include_mtg and not include_dsc else ["作業", "会議"] if include_mtg else ["作業", "議論"])]
+
+    # 直間比率算出
     total_minutes = src["作業時間(分)"].sum()
+    indirect_minutes = src[src["プロジェクト略称"] == "間接"]["作業時間(分)"].sum()
+    direct_minutes = total_minutes - indirect_minutes
+    direct_indirect_ratio = (direct_minutes / total_minutes * 100) if total_minutes > 0 else 0
+
+    # 平均日次工数算出
     day_count = src["ファイル日付"].nunique() if "ファイル日付" in src.columns else 1
     avg_daily_minutes = total_minutes / day_count if day_count > 0 else 0
 
+    # 会議・議論の工数と比率算出
     mtg_minutes = df[df["区分"] == "会議"]["作業時間(分)"].sum() if include_mtg else 0
     dsc_minutes = df[df["区分"] == "議論"]["作業時間(分)"].sum() if include_dsc else 0
     mtg_ratio = (mtg_minutes / total_minutes * 100) if total_minutes > 0 else 0
     dsc_ratio = (dsc_minutes / total_minutes * 100) if total_minutes > 0 else 0
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("期間内総工数", f"{total_minutes/60:.1f} h")
+    c1.metric("直間比率", f"{direct_indirect_ratio:.1f} %")
     c2.metric("平均日次工数", f"{avg_daily_minutes/60:.1f} h/日")
     c3.metric("会議比率", f"{mtg_ratio:.1f} %")
     c4.metric("議論比率", f"{dsc_ratio:.1f} %")
