@@ -196,34 +196,6 @@ def sum_df_each_order(
     return df_truncated_sorted
 
 
-def calc_direct_indirect_ratio(df_sum_order: pd.DataFrame) -> float:
-    """
-    直接工数と間接工数の比率を計算する。
-
-    Args:
-        df_sum_order (pd.DataFrame): オーダ番号ごとの集計データフレーム
-
-    Returns:
-        float: 直接工数と間接工数の比率（直接工数 / 総工数）
-    """
-    # 1. dfのオーダ番号列をキーにしてOrderInformation()から各行のPJ略を取得する
-    order_info = Task_def.OrderInformation()
-    order_abbr_map = order_info.df.set_index("order_number")["project_abbr"]
-
-    # 2. dfにPJ略列を追加する
-    df = df_sum_order.copy()
-    df['PJ略'] = df['オーダ番号'].map(order_abbr_map).fillna('')
-
-    # 3. PJ略列が"間接"以外行の工数を合計する
-    direct_work_time = df[df['PJ略'] != '間接']['工数'].sum()
-
-    # 4. "間接"以外の工数列の合計 / 工数列の合計 として比率を計算する
-    total_work_time = df['工数'].sum()
-    if total_work_time == 0:
-        return 0.0
-    return direct_work_time / total_work_time
-
-
 def convert_df_for_display(
         df: pd.DataFrame, sort: bool)-> pd.DataFrame:
 
@@ -246,8 +218,7 @@ def convert_df_for_display(
 def calc_WorkLog_summary(
         csv_filepath: str,
         df_truncated: pd.DataFrame,
-        add_daytime_break: bool,
-        direct_indirect_ratio: float) -> pd.DataFrame:
+        add_daytime_break: bool) -> pd.DataFrame:
     # 1. CSVファイルの全ての行・列をdataframeとして読み込む
     # ※開始時刻列、終了時刻列はdatetime型として読み込む
     df = pd.read_csv(csv_filepath, parse_dates=['開始時刻', '終了時刻'])
@@ -274,10 +245,13 @@ def calc_WorkLog_summary(
         daytime_break_minutes = 0
     total_break_minutes = total_stay_minutes - total_real_minutes - daytime_break_minutes
 
-    # 6. 表示用のdfを作成
-    # 6-1. 各種時間をフォーマット変換して辞書に格納
+    # 6. 直接工数と間接工数の比率を計算
+    direct_indirect_ratio = _calc_direct_indirect_ratio(df_truncated) * 100
+
+    # 7. 表示用のdfを作成
+    # 7-1. 各種時間をフォーマット変換して辞書に格納
     output_dict = {
-        "直間比率": f"{(direct_indirect_ratio*100):.1f} %",
+        "直間比率": f"{direct_indirect_ratio:.1f} %",
         "ESS始業": earliest_start.strftime("%H:%M"),
         "ESS終業": latest_end.strftime("%H:%M"),
         "ESS滞在": _format_minutes_to_hours_minutes(total_stay_minutes),
@@ -286,7 +260,7 @@ def calc_WorkLog_summary(
         "BJP合計": _format_minutes_to_hours_minutes(total_real_minutes_truncated),
     }
 
-    # 6-2. 辞書のkeysを列名、valuesをデータとしてDataFrameを作成
+    # 7-2. 辞書のkeysを列名、valuesをデータとしてDataFrameを作成
     df_output = pd.DataFrame([output_dict])
 
     return df_output
@@ -387,11 +361,38 @@ def make_WorkLog_barchart(csv_filepath: str) -> matplotlib.figure.Figure:
     return fig
 
 
-
 def _format_minutes_to_hours_minutes(minutes: int) -> str:
     hours = minutes // 60
     mins = minutes % 60
     return f"{hours}h{mins:02d}m"
+
+
+def _calc_direct_indirect_ratio(df_sum_order: pd.DataFrame) -> float:
+    """
+    直接工数と間接工数の比率を計算する。
+
+    Args:
+        df_sum_order (pd.DataFrame): オーダ番号ごとの集計データフレーム
+
+    Returns:
+        float: 直接工数と間接工数の比率（直接工数 / 総工数）
+    """
+    # 1. dfのオーダ番号列をキーにしてOrderInformation()から各行のPJ略を取得する
+    order_info = Task_def.OrderInformation()
+    order_abbr_map = order_info.df.set_index("order_number")["project_abbr"]
+
+    # 2. dfにPJ略列を追加する
+    df = df_sum_order.copy()
+    df['PJ略'] = df['オーダ番号'].map(order_abbr_map).fillna('')
+
+    # 3. PJ略列が"間接"以外行の工数を合計する
+    direct_work_time = df[df['PJ略'] != '間接']['工数'].sum()
+
+    # 4. "間接"以外の工数列の合計 / 工数列の合計 として比率を計算する
+    total_work_time = df['工数'].sum()
+    if total_work_time == 0:
+        return 0.0
+    return direct_work_time / total_work_time
 
 
 if __name__ == "__main__":
