@@ -231,7 +231,6 @@ if __name__ == "__main__":
 
     start_date, end_date = Output_G.get_period_range(period_key)
     granularity = _PERIOD_GRANULARITY.get(period_key, "monthly")
-    print(granularity, start_date, end_date)
 
     c1, c2, c3 = st.columns([3, 1, 1])
     with c1:
