@@ -26,24 +26,15 @@ def get_period_range(
 
     Args:
         period_key (str): 期間キー（1W, 1M, 3M, 6M, 1Y）
-        base_date (Optional[datetime], optional): 基準日。指定しない場合は、1wなら本日、それ以外なら本日を含む月の最終日
+        base_date (Optional[datetime], optional): 基準日。指定しない場合は本日になる
 
     Returns:
         tuple[datetime, datetime]: 期間の開始日と終了日
     """
 
     if base_date is None:
-        if period_key == "1W":
-            # base_dateなしで1wの場合、end_dateは本日に設定する
-            end_date = Task_def.get_ESS_dt()
+        end_date = Task_def.get_ESS_dt()
 
-        else:
-            # base_dateなしで1W以外の場合、end_dateを本日を含む月の最終日に設定する
-            base_date = Task_def.get_ESS_dt()
-            next_month_first = base_date.replace(day=1) + timedelta(days=32)
-            end_date = next_month_first.replace(
-                day=1, hour=0, minute=0, second=0, microsecond=0
-            ) - timedelta(seconds=1)
     else:
         end_date = base_date.replace(hour=23, minute=59, second=59, microsecond=999999)
     delta_map = {"1W": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365}
