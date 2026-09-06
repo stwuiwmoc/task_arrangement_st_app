@@ -151,7 +151,7 @@ def load_willdo_csv(filepath: str) -> pd.DataFrame:
 
 def sort_willdo_for_display(df: pd.DataFrame) -> pd.DataFrame:
     """WillDoリストを表示用に並べ替える。
-    「残時間/日」降順でソートし、完了系（済・不要・後回）の行を末尾に移動する。
+    「残時間/日」降順でソートし、直近〆切が存在しない行を先頭に移動し、最後に状態が済・不要・後回の行を末尾に移動する。
 
     Args:
         df (pd.DataFrame): WillDoリストのDataFrame
@@ -160,8 +160,17 @@ def sort_willdo_for_display(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: 並べ替え後のDataFrame
     """
     done_statuses = ["済", "不要", "後回"]
-    df_active = df[~df["状態"].isin(done_statuses)].sort_values(by=["残時間/日", "タスクID"], ascending=[False, True])
-    df_done = df[df["状態"].isin(done_statuses)].sort_values(by=["残時間/日", "タスクID"], ascending=[False, True])
+
+    def _sort(group_df: pd.DataFrame) -> pd.DataFrame:
+        if "直近〆切" in group_df.columns:
+            has_dl = group_df["直近〆切"].notna() & (group_df["直近〆切"].astype(str).str.strip() != "")
+            return (group_df.assign(_has_deadline=has_dl)
+                    .sort_values(["_has_deadline", "残時間/日", "タスクID"], ascending=[True, False, True])
+                    .drop(columns=["_has_deadline"]))
+        return group_df.sort_values(["残時間/日", "タスクID"], ascending=[False, True])
+
+    df_active = _sort(df[~df["状態"].isin(done_statuses)])
+    df_done = _sort(df[df["状態"].isin(done_statuses)])
     return pd.concat([df_active, df_done], ignore_index=True)
 
 
