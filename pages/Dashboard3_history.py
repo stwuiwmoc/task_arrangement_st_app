@@ -225,11 +225,22 @@ if __name__ == "__main__":
     task_view.task_sidebar()
     st.markdown("#### 過去傾向・実績ダッシュボード")
 
-    # 後でsidebar連携に修正
-    period_key = st.selectbox(
-        "表示期間", ["1W", "1M", "3M", "6M", "1Y"], index=0)
+    col_period, col_base_date = st.columns(2)
+    with col_period:
+        period_key = st.selectbox(
+            "表示期間",
+            ["1W", "1M", "3M", "6M", "1Y"],
+            index=0,
+            label_visibility="collapsed")
+    with col_base_date:
+        base_date = st.date_input(
+            "起点日",
+            value=Task_def.get_ESS_dt().date(),
+            key="history_base_date_input",
+            label_visibility="collapsed"
+        )
 
-    start_date, end_date = Output_G.get_period_range(period_key)
+    start_date, end_date = Output_G.get_period_range(period_key, base_date=base_date)
     granularity = _PERIOD_GRANULARITY.get(period_key, "monthly")
 
     c1, c2, c3 = st.columns([3, 1, 1])

@@ -36,7 +36,8 @@ def get_period_range(
         end_date = Task_def.get_ESS_dt()
 
     else:
-        end_date = base_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        base_dt = pd.Timestamp(base_date).to_pydatetime()
+        end_date = base_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
     delta_map = {"1W": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365}
     start_date = end_date - timedelta(days=delta_map.get(period_key, 30))
     return start_date, end_date
