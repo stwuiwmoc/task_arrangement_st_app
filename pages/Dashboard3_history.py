@@ -162,7 +162,11 @@ def render_trend_chart_rate(monthly_df: pd.DataFrame, order_df: pd.DataFrame, gr
     return
 
 
-def render_summary_table(monthly_df: pd.DataFrame, order_df: pd.DataFrame) -> None:
+def render_summary_table(
+    monthly_df: pd.DataFrame,
+    order_df: pd.DataFrame,
+    table_mode: str = "absolute",
+    ) -> None:
     """月次オーダ別区分別のピボットテーブルを表示する
 
     Args:
@@ -173,6 +177,42 @@ def render_summary_table(monthly_df: pd.DataFrame, order_df: pd.DataFrame) -> No
         st.info("指定期間のデータがありません。")
         return
 
+    pivot_display, num_cols = _build_summary_table_df(monthly_df, order_df, table_mode=table_mode)
+    ym_cols = [c for c in num_cols if c != "合計"]
+    label_list = [
+        f"{row['PJ略']} {row['オーダ略称']}" for _, row in order_df.iterrows()
+    ]
+    color_map_by_label = _generate_order_colors(label_list)
+    abbr_to_color = {
+        row["オーダ略称"]: color_map_by_label[f"{row['PJ略']} {row['オーダ略称']}"]
+        for _, row in order_df.iterrows()
+    }
+    number_format = "{:.1f}%" if table_mode == "ratio" else "{:.1f}"
+    styled = (
+        pivot_display.style
+        .hide(axis="index")
+        .format(number_format, subset=num_cols)
+        .background_gradient(cmap="YlOrRd", subset=ym_cols, axis=None)
+        .map(lambda v: "background-color: white" if v == 0 else "", subset=num_cols)
+        .map(
+            lambda v: f"background-color: {abbr_to_color.get(v, '')}; color: white"
+            if abbr_to_color.get(v) else "",
+            subset=["オーダ略称"],
+        )
+    )
+    st.dataframe(styled, width="stretch")
+    return
+
+
+def _build_summary_table_df(
+    monthly_df: pd.DataFrame,
+    order_df: pd.DataFrame,
+    table_mode: str = "absolute",
+) -> tuple[pd.DataFrame, list[str]]:
+    """サマリーテーブル表示用のDataFrameを作る。
+
+    table_mode が ratio の場合は、各区間列の合計が 100% になるように正規化する。
+    """
     enriched_df = _enrich_monthly_df(monthly_df, order_df)
     pivot = enriched_df.pivot_table(
         index=["PJ略", "オーダ略称", "区分"],
@@ -190,34 +230,24 @@ def render_summary_table(monthly_df: pd.DataFrame, order_df: pd.DataFrame) -> No
     ]
     if ordered_idx:
         pivot = pivot.loc[ordered_idx]
-    pivot["合計"] = pivot.sum(axis=1)
 
-    # reset_index してPJ略・オーダ略称を通常列にし、スタイル対象にする
+    interval_cols = list(pivot.columns)
+    if table_mode == "ratio":
+        interval_totals = pivot.sum(axis=0)
+        grand_total = float(interval_totals.sum())
+        ratio_pivot = pivot.astype(float).copy()
+        for col in interval_cols:
+            col_total = float(interval_totals.get(col, 0))
+            ratio_pivot[col] = (ratio_pivot[col] / col_total * 100) if col_total > 0 else 0.0
+        row_totals = pivot.sum(axis=1)
+        ratio_pivot["合計"] = (row_totals / grand_total * 100) if grand_total > 0 else 0.0
+        pivot = ratio_pivot
+    else:
+        pivot["合計"] = pivot.sum(axis=1)
+
     pivot_display = pivot.reset_index()
-    ym_cols = [c for c in pivot.columns if c != "合計"]
-    num_cols = ym_cols + ["合計"]
-    label_list = [
-        f"{row['PJ略']} {row['オーダ略称']}" for _, row in order_df.iterrows()
-    ]
-    color_map_by_label = _generate_order_colors(label_list)
-    abbr_to_color = {
-        row["オーダ略称"]: color_map_by_label[f"{row['PJ略']} {row['オーダ略称']}"]
-        for _, row in order_df.iterrows()
-    }
-    styled = (
-        pivot_display.style
-        .hide(axis="index")
-        .format("{:.1f}", subset=num_cols)
-        .background_gradient(cmap="YlOrRd", subset=ym_cols, axis=None)
-        .map(lambda v: "background-color: white" if v == 0 else "", subset=num_cols)
-        .map(
-            lambda v: f"background-color: {abbr_to_color.get(v, '')}; color: white"
-            if abbr_to_color.get(v) else "",
-            subset=["オーダ略称"],
-        )
-    )
-    st.dataframe(styled, width="stretch")
-    return
+    num_cols = interval_cols + ["合計"]
+    return pivot_display, num_cols
 
 
 if __name__ == "__main__":
@@ -281,7 +311,11 @@ if __name__ == "__main__":
         else:
             render_trend_chart_rate(aggregated_df, order_df, granularity)
 
-        render_summary_table(aggregated_df, order_df)
+        render_summary_table(
+            aggregated_df,
+            order_df,
+            table_mode="ratio" if chart_mode == "構成比" else "absolute",
+        )
 
     with tab_b:
         st.info("見込み vs 実績は未実装です。")
