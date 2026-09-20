@@ -14,6 +14,253 @@ import services.C_WorkLog_record as Output_C
 from sidebar import task_view
 
 
+def sanitize_halfwidth_digit(val: str) -> str | None:
+    """
+    入力値が半角数字（0-9）のみで構成されていればそのまま返し、
+    それ以外（全角数字や記号、空文字、Noneなど）はNoneを返す。
+
+    Args:
+        val (str): 入力値（文字列またはNone）
+
+    Returns:
+        str | None: 半角数字のみならその値、そうでなければNone
+    """
+    if val is not None and (val.isdigit() and all('0' <= c <= '9' for c in val)):
+        return val
+    return None
+
+
+def resolve_willdo_file(selected_str: str) -> str:
+    """指定日のWill-doリストCSVパスを返す。
+
+    Args:
+        selected_str (str): yyMMdd形式の日付文字列
+
+    Returns:
+        str: 通常保存先またはold配下のWill-doリストCSVパス
+    """
+    willdo_main = os.path.join("data", "WillDo", f"WillDo{selected_str}.csv")
+    willdo_old = os.path.join("data", "WillDo", "old", f"WillDo{selected_str}.csv")
+    return willdo_main if os.path.exists(willdo_main) else willdo_old
+
+
+def find_task_csv_path(task_id: str) -> str | None:
+    """タスクIDに対応するCSVファイルのパスをDaily/Active・Project/Activeから検索して返す。
+
+    Args:
+        task_id (str): 検索するタスクID
+
+    Returns:
+        str | None: 見つかったCSVファイルのパス。見つからない場合はNone。
+    """
+    search_dirs = [
+        os.path.join("data", "Daily", "Active"),
+        os.path.join("data", "Project", "Active"),
+    ]
+    for d in search_dirs:
+        candidate = os.path.join(d, f"{task_id}.csv")
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+def load_willdo_csv(filepath: str) -> pd.DataFrame:
+    """WillDoリストのCSVを読み込み、内部列を除去して返す
+
+    Args:
+        filepath: CSVファイルのパス
+
+    Returns:
+        pd.DataFrame: 内部列を除去したDataFrame
+    """
+    df = pd.read_csv(filepath, encoding="utf-8-sig")
+    # 内部列（::auto_unique_id::など）を除去
+    internal_cols = [c for c in df.columns if c.startswith("::")]
+    if internal_cols:
+        df = df.drop(columns=internal_cols)
+        # CSVファイルから内部列を除去した状態で上書き保存
+        df.to_csv(filepath, index=False, encoding="utf-8-sig")
+    return df
+
+
+def get_edited_dataframe(aggrid_ret, df_original: pd.DataFrame) -> pd.DataFrame:
+    """AgGridの返却値から編集後のDataFrameを取得する（streamlit-aggrid v1.x対応）
+
+    Args:
+        aggrid_ret: AgGridの返却値
+        df_original: 元のDataFrame
+
+    Returns:
+        pd.DataFrame: 編集後のDataFrame（元のDataFrameと同じ列のみ）
+    """
+    # 内部列を除いた元の列リスト
+    original_cols = [c for c in df_original.columns if not c.startswith("::")]
+
+    # v1.x系: 属性として .data でアクセス
+    if hasattr(aggrid_ret, 'data') and aggrid_ret.data is not None:
+        edited_df = aggrid_ret.data.copy()
+        # 内部列を除去
+        cols_to_keep = [c for c in edited_df.columns if not c.startswith("::")]
+        edited_df = edited_df[cols_to_keep]
+        # 列順を元のDataFrameに合わせる（共通の列のみ）
+        common_cols = [c for c in original_cols if c in edited_df.columns]
+        edited_df = edited_df[common_cols]
+        return edited_df
+    # 旧バージョン互換: 辞書形式でアクセス
+    if isinstance(aggrid_ret, dict) and "data" in aggrid_ret:
+        return aggrid_ret["data"]
+    return df_original
+
+
+def has_dataframe_changed(edited_df: pd.DataFrame, original_df: pd.DataFrame) -> bool:
+    """2つのDataFrameに差分があるか判定（型の違いを吸収）
+
+    Args:
+        edited_df: 編集後のDataFrame
+        original_df: 元のDataFrame
+
+    Returns:
+        bool: 差分がある場合True
+    """
+    if edited_df.shape != original_df.shape:
+        return True
+    if list(edited_df.columns) != list(original_df.columns):
+        return True
+    # 値を文字列化して比較（型の違いを吸収）
+    for col in edited_df.columns:
+        if not edited_df[col].astype(str).equals(original_df[col].astype(str)):
+            return True
+    return False
+
+
+def sort_willdo_for_display(df: pd.DataFrame) -> pd.DataFrame:
+    """WillDoリストを表示用に並べ替える。
+    「残時間/日」降順でソートし、直近〆切が存在しない行を先頭に移動し、最後に状態が済・不要・後回の行を末尾に移動する。
+
+    Args:
+        df (pd.DataFrame): WillDoリストのDataFrame
+
+    Returns:
+        pd.DataFrame: 並べ替え後のDataFrame
+    """
+    done_statuses = ["済", "不要", "後回"]
+
+    def _sort(group_df: pd.DataFrame) -> pd.DataFrame:
+        """状態グループごとにWill-do表示順へ並べ替える。
+
+        Args:
+            group_df (pd.DataFrame): 状態ごとに絞り込んだDataFrame
+
+        Returns:
+            pd.DataFrame: 並べ替え後のDataFrame
+        """
+        if "直近〆切" in group_df.columns:
+            has_dl = group_df["直近〆切"].notna() & (group_df["直近〆切"].astype(str).str.strip() != "")
+            return (group_df.assign(_has_deadline=has_dl)
+                    .sort_values(["_has_deadline", "残時間/日", "タスクID"], ascending=[True, False, True])
+                    .drop(columns=["_has_deadline"]))
+        return group_df.sort_values(["残時間/日", "タスクID"], ascending=[False, True])
+
+    df_active = _sort(df[~df["状態"].isin(done_statuses)])
+    df_done = _sort(df[df["状態"].isin(done_statuses)])
+    return pd.concat([df_active, df_done], ignore_index=True)
+
+
+def get_incomplete_subtasks_df(task_id: str) -> pd.DataFrame | None:
+    """タスクIDに属する未完了サブタスクをsort_index昇順で取得して返す。
+
+    Args:
+        task_id (str): 対象のタスクID
+
+    Returns:
+        pd.DataFrame | None: 未完了サブタスクのDataFrame（順序・サブID・サブタスク名・見込(分)列）。
+                             CSVが見つからない場合はNone。
+    """
+    task_csv_path = find_task_csv_path(task_id)
+    if task_csv_path is None:
+        return None
+    task_now = Task_def.read_task_csv(task_csv_path)
+    incomplete_df = (
+        task_now.sub_tasks[task_now.sub_tasks["is_incomplete"] == True]
+        .sort_values("sort_index")
+        .reset_index(drop=True)
+    )
+    return incomplete_df[["subtask_id", "estimated_time", "actual_time", "name"]].rename(columns={
+        "subtask_id": "サブID",
+        "estimated_time": "見込",
+        "actual_time": "実績",
+        "name": "サブタスク名",
+    })
+
+
+def build_order_options() -> tuple[list[str], dict[str, str]]:
+    """会議記録用のオーダ選択肢とオーダ番号対応表を作成する。
+
+    Args:
+        なし
+
+    Returns:
+        tuple[list[str], dict[str, str]]: 表示ラベル一覧とラベルからオーダ番号への対応表
+    """
+    order_info = Task_def.OrderInformation()
+    order_numbers = order_info.df["order_number"].dropna().unique().tolist()
+    order_labels = []
+    order_number_map = {}
+    for order_number in order_numbers:
+        pj_abbr = order_info.get_project_abbr(order_number)
+        order_abbr = order_info.get_order_abbr(order_number)
+        label = f"{pj_abbr} / {order_abbr}"
+        order_labels.append(label)
+        order_number_map[label] = order_number
+    return order_labels, order_number_map
+
+
+def get_default_task_choice_index(task_choices: list[str], edited_df: pd.DataFrame) -> int:
+    """「今」のタスクをもとにタスク選択肢の初期インデックスを返す。
+
+    Args:
+        task_choices (list[str]): 表示用に整形されたタスク選択肢一覧
+        edited_df (pd.DataFrame): 編集後のWill-doリストDataFrame
+
+    Returns:
+        int: セレクトボックスの初期インデックス
+    """
+    now_task_default_index = 0
+    if task_choices:
+        now_rows = edited_df[edited_df["状態"] == "今"]
+        if not now_rows.empty:
+            now_task_id = now_rows.iloc[0]["タスクID"]
+            for index, label in enumerate(task_choices):
+                if label.split("：")[0] == now_task_id:
+                    now_task_default_index = index
+                    break
+    return now_task_default_index
+
+
+def validate_worklog_chronology(
+    selected_str: str,
+    achievement_minutes: str,
+    wraptime_minutes: str,
+    ) -> bool:
+    """工数記録の開始時刻が既存データと時系列矛盾しないか確認する。
+
+    Args:
+        selected_str (str): yyMMdd形式の日付文字列
+        achievement_minutes (str): 実績時間(分)
+        wraptime_minutes (str): 終了後経過時間(分)
+
+    Returns:
+        bool: 時系列矛盾がなければTrue、あればFalse
+    """
+    new_end = datetime.now() - timedelta(minutes=int(wraptime_minutes))
+    new_start = new_end - timedelta(minutes=int(achievement_minutes))
+    conflict_start = Output_C.get_WorkLog_conflict_last_start_time(selected_str, new_start)
+    if conflict_start is not None:
+        st.warning(f"工数実績csv既存行の開始時刻は {conflict_start.strftime('%H:%M')} のため、入力値では時系列が矛盾します")
+        return False
+    return True
+
+
 def WillDo_display_settings(
         df: pd.DataFrame, use_filter: bool) -> st_aggrid.AgGrid:
     """Willdoリスト表示の共通設定
@@ -84,171 +331,17 @@ def WillDo_display_settings(
     )
     return aggrid_ret
 
-# 入力値が半角数字以外ならNoneにする関数
-def sanitize_halfwidth_digit(val: str) -> str | None:
-    """
-    入力値が半角数字（0-9）のみで構成されていればそのまま返し、
-    それ以外（全角数字や記号、空文字、Noneなど）はNoneを返す。
-
-    Args:
-        val (str): 入力値（文字列またはNone）
-
-    Returns:
-        str | None: 半角数字のみならその値、そうでなければNone
-    """
-    if val is not None and (val.isdigit() and all('0' <= c <= '9' for c in val)):
-        return val
-    return None
-
-
-def get_edited_dataframe(aggrid_ret, df_original: pd.DataFrame) -> pd.DataFrame:
-    """AgGridの返却値から編集後のDataFrameを取得する（streamlit-aggrid v1.x対応）
-
-    Args:
-        aggrid_ret: AgGridの返却値
-        df_original: 元のDataFrame
-
-    Returns:
-        pd.DataFrame: 編集後のDataFrame（元のDataFrameと同じ列のみ）
-    """
-    # 内部列を除いた元の列リスト
-    original_cols = [c for c in df_original.columns if not c.startswith("::")]
-
-    # v1.x系: 属性として .data でアクセス
-    if hasattr(aggrid_ret, 'data') and aggrid_ret.data is not None:
-        edited_df = aggrid_ret.data.copy()
-        # 内部列を除去
-        cols_to_keep = [c for c in edited_df.columns if not c.startswith("::")]
-        edited_df = edited_df[cols_to_keep]
-        # 列順を元のDataFrameに合わせる（共通の列のみ）
-        common_cols = [c for c in original_cols if c in edited_df.columns]
-        edited_df = edited_df[common_cols]
-        return edited_df
-    # 旧バージョン互換: 辞書形式でアクセス
-    if isinstance(aggrid_ret, dict) and "data" in aggrid_ret:
-        return aggrid_ret["data"]
-    return df_original
-
-
-def load_willdo_csv(filepath: str) -> pd.DataFrame:
-    """WillDoリストのCSVを読み込み、内部列を除去して返す
-
-    Args:
-        filepath: CSVファイルのパス
-
-    Returns:
-        pd.DataFrame: 内部列を除去したDataFrame
-    """
-    df = pd.read_csv(filepath, encoding="utf-8-sig")
-    # 内部列（::auto_unique_id::など）を除去
-    internal_cols = [c for c in df.columns if c.startswith("::")]
-    if internal_cols:
-        df = df.drop(columns=internal_cols)
-        # CSVファイルから内部列を除去した状態で上書き保存
-        df.to_csv(filepath, index=False, encoding="utf-8-sig")
-    return df
-
-
-def sort_willdo_for_display(df: pd.DataFrame) -> pd.DataFrame:
-    """WillDoリストを表示用に並べ替える。
-    「残時間/日」降順でソートし、直近〆切が存在しない行を先頭に移動し、最後に状態が済・不要・後回の行を末尾に移動する。
-
-    Args:
-        df (pd.DataFrame): WillDoリストのDataFrame
-
-    Returns:
-        pd.DataFrame: 並べ替え後のDataFrame
-    """
-    done_statuses = ["済", "不要", "後回"]
-
-    def _sort(group_df: pd.DataFrame) -> pd.DataFrame:
-        if "直近〆切" in group_df.columns:
-            has_dl = group_df["直近〆切"].notna() & (group_df["直近〆切"].astype(str).str.strip() != "")
-            return (group_df.assign(_has_deadline=has_dl)
-                    .sort_values(["_has_deadline", "残時間/日", "タスクID"], ascending=[True, False, True])
-                    .drop(columns=["_has_deadline"]))
-        return group_df.sort_values(["残時間/日", "タスクID"], ascending=[False, True])
-
-    df_active = _sort(df[~df["状態"].isin(done_statuses)])
-    df_done = _sort(df[df["状態"].isin(done_statuses)])
-    return pd.concat([df_active, df_done], ignore_index=True)
-
-
-def has_dataframe_changed(edited_df: pd.DataFrame, original_df: pd.DataFrame) -> bool:
-    """2つのDataFrameに差分があるか判定（型の違いを吸収）
-
-    Args:
-        edited_df: 編集後のDataFrame
-        original_df: 元のDataFrame
-
-    Returns:
-        bool: 差分がある場合True
-    """
-    if edited_df.shape != original_df.shape:
-        return True
-    if list(edited_df.columns) != list(original_df.columns):
-        return True
-    # 値を文字列化して比較（型の違いを吸収）
-    for col in edited_df.columns:
-        if not edited_df[col].astype(str).equals(original_df[col].astype(str)):
-            return True
-    return False
-
-
-def find_task_csv_path(task_id: str) -> str | None:
-    """タスクIDに対応するCSVファイルのパスをDaily/Active・Project/Activeから検索して返す。
-
-    Args:
-        task_id (str): 検索するタスクID
-
-    Returns:
-        str | None: 見つかったCSVファイルのパス。見つからない場合はNone。
-    """
-    search_dirs = [
-        os.path.join("data", "Daily", "Active"),
-        os.path.join("data", "Project", "Active"),
-    ]
-    for d in search_dirs:
-        candidate = os.path.join(d, f"{task_id}.csv")
-        if os.path.exists(candidate):
-            return candidate
-    return None
-
-
-def get_incomplete_subtasks_df(task_id: str) -> pd.DataFrame | None:
-    """タスクIDに属する未完了サブタスクをsort_index昇順で取得して返す。
-
-    Args:
-        task_id (str): 対象のタスクID
-
-    Returns:
-        pd.DataFrame | None: 未完了サブタスクのDataFrame（順序・サブID・サブタスク名・見込(分)列）。
-                             CSVが見つからない場合はNone。
-    """
-    task_csv_path = find_task_csv_path(task_id)
-    if task_csv_path is None:
-        return None
-    task_now = Task_def.read_task_csv(task_csv_path)
-    incomplete_df = (
-        task_now.sub_tasks[task_now.sub_tasks["is_incomplete"] == True]
-        .sort_values("sort_index")
-        .reset_index(drop=True)
-    )
-    return incomplete_df[["subtask_id", "estimated_time", "actual_time", "name"]].rename(columns={
-        "subtask_id": "サブID",
-        "estimated_time": "見込",
-        "actual_time": "実績",
-        "name": "サブタスク名",
-    })
-
-
-def resolve_willdo_file(selected_str: str) -> str:
-    willdo_main = os.path.join("data", "WillDo", f"WillDo{selected_str}.csv")
-    willdo_old = os.path.join("data", "WillDo", "old", f"WillDo{selected_str}.csv")
-    return willdo_main if os.path.exists(willdo_main) else willdo_old
-
 
 def _render_now_task_subtasks(now_count: int, edited_df: pd.DataFrame) -> None:
+    """「今」に設定されたタスクの未完了サブタスク一覧を表示する。
+
+    Args:
+        now_count (int): 状態が「今」の行数
+        edited_df (pd.DataFrame): 編集後のWill-doリストDataFrame
+
+    Returns:
+        なし
+    """
     if now_count == 0:
         st.write("「今」が選択されていません")
         return
@@ -263,6 +356,15 @@ def _render_now_task_subtasks(now_count: int, edited_df: pd.DataFrame) -> None:
 
 
 def _render_timer_start_controls(now_row: pd.Series, selected_str: str) -> None:
+    """「今」のタスクに対する新規タイマー開始UIを表示する。
+
+    Args:
+        now_row (pd.Series): 状態が「今」の行データ
+        selected_str (str): yyMMdd形式の日付文字列
+
+    Returns:
+        なし
+    """
     radio_minutes = [15, 8, now_row["見込み"], math.ceil(now_row["残時間/日"])]
     col_timer1_radio, col_timer1_btn = st.columns([6, 2])
     with col_timer1_radio:
@@ -290,6 +392,15 @@ def _render_timer_start_controls(now_row: pd.Series, selected_str: str) -> None:
 
 
 def _render_timer_continue_button(now_row: pd.Series, selected_str: str) -> None:
+    """「今」のタスクに対する連続開始ボタンを表示する。
+
+    Args:
+        now_row (pd.Series): 状態が「今」の行データ
+        selected_str (str): yyMMdd形式の日付文字列
+
+    Returns:
+        なし
+    """
     if st.button(f"続けて  \n開始", key="willdo_timer2_btn", type="tertiary", width='stretch'):
         if datetime.now() < Output_C.check_WorkLog_latest_end_datetime(selected_str):
             Output_C.continuously_start_and_record_WorkLog(
@@ -302,21 +413,16 @@ def _render_timer_continue_button(now_row: pd.Series, selected_str: str) -> None
             st.warning("直前のサブタスク終了時刻を過ぎているため、続けて開始できません。新規にタイマーを開始してください。")
 
 
-def _validate_worklog_chronology(
-    selected_str: str,
-    achievement_minutes: str,
-    wraptime_minutes: str,
-    ) -> bool:
-    new_end = datetime.now() - timedelta(minutes=int(wraptime_minutes))
-    new_start = new_end - timedelta(minutes=int(achievement_minutes))
-    conflict_start = Output_C.get_WorkLog_conflict_last_start_time(selected_str, new_start)
-    if conflict_start is not None:
-        st.warning(f"工数実績csv既存行の開始時刻は {conflict_start.strftime('%H:%M')} のため、入力値では時系列が矛盾します")
-        return False
-    return True
-
-
 def _render_task_record_controls(now_row: pd.Series, selected_str: str) -> None:
+    """「今」のタスクに対する手動実績記録UIを表示する。
+
+    Args:
+        now_row (pd.Series): 状態が「今」の行データ
+        selected_str (str): yyMMdd形式の日付文字列
+
+    Returns:
+        なし
+    """
     col_record_task_minute, col_record_task_wraptime, col_record_task_btn = st.columns([2.5, 2.5, 2])
     with col_record_task_minute:
         task_achievement_minutes = st.text_input(
@@ -334,7 +440,7 @@ def _render_task_record_controls(now_row: pd.Series, selected_str: str) -> None:
             key="willdo_timer3_btn", width='stretch')
         if record_button:
             if (task_achievement_minutes is not None) and (task_wraptime_minutes is not None):
-                if _validate_worklog_chronology(selected_str, task_achievement_minutes, task_wraptime_minutes):
+                if validate_worklog_chronology(selected_str, task_achievement_minutes, task_wraptime_minutes):
                     Output_C.record_completed_task_WorkLog(
                         willdo_date=selected_str,
                         achievement_minutes=int(task_achievement_minutes),
@@ -347,23 +453,17 @@ def _render_task_record_controls(now_row: pd.Series, selected_str: str) -> None:
                 st.warning("分数を両方入力してください")
 
 
-def _build_order_options() -> tuple[list[str], dict[str, str]]:
-    order_info = Task_def.OrderInformation()
-    order_numbers = order_info.df["order_number"].dropna().unique().tolist()
-    order_labels = []
-    order_number_map = {}
-    for order_number in order_numbers:
-        pj_abbr = order_info.get_project_abbr(order_number)
-        order_abbr = order_info.get_order_abbr(order_number)
-        label = f"{pj_abbr} / {order_abbr}"
-        order_labels.append(label)
-        order_number_map[label] = order_number
-    return order_labels, order_number_map
-
-
 def _render_meeting_record_controls(selected_str: str) -> None:
+    """会議実績を手動記録するUIを表示する。
+
+    Args:
+        selected_str (str): yyMMdd形式の日付文字列
+
+    Returns:
+        なし
+    """
     st.markdown("#### 打合せ実績を記録", unsafe_allow_html=True)
-    order_labels, order_number_map = _build_order_options()
+    order_labels, order_number_map = build_order_options()
 
     meeting_name_input = st.text_input(
         "会議名", key="willdo_meetingname", placeholder="会議名", label_visibility="collapsed")
@@ -400,7 +500,7 @@ def _render_meeting_record_controls(selected_str: str) -> None:
         )
         if meeting_record_btn:
             if meeting_name_input and (meeting_minutes is not None) and (wraptime_minutes is not None):
-                if _validate_worklog_chronology(selected_str, meeting_minutes, wraptime_minutes):
+                if validate_worklog_chronology(selected_str, meeting_minutes, wraptime_minutes):
                     Output_C.record_completed_meeting_WorkLog(
                         willdo_date=selected_str,
                         achievement_minutes=int(meeting_minutes),
@@ -414,27 +514,22 @@ def _render_meeting_record_controls(selected_str: str) -> None:
                 st.warning("会議名とオーダと分数を全て入力してください")
 
 
-def _get_default_task_choice_index(task_choices: list[str], edited_df: pd.DataFrame) -> int:
-    now_task_default_index = 0
-    if task_choices:
-        now_rows = edited_df[edited_df["状態"] == "今"]
-        if not now_rows.empty:
-            now_task_id = now_rows.iloc[0]["タスクID"]
-            for index, label in enumerate(task_choices):
-                if label.split("：")[0] == now_task_id:
-                    now_task_default_index = index
-                    break
-    return now_task_default_index
-
-
 def _render_add_task_controls(edited_df: pd.DataFrame) -> None:
+    """Will-doにタスクを追加するUIを表示する。
+
+    Args:
+        edited_df (pd.DataFrame): 編集後のWill-doリストDataFrame
+
+    Returns:
+        なし
+    """
     st.markdown("#### Will-doにタスク追加", unsafe_allow_html=True)
 
     task_choices, _task_id_to_csv = task_view.get_task_choices(
         choice_from_active=True,
         include_task_name=True)
     sorted_task_choices = sorted(task_choices)
-    now_task_default_index = _get_default_task_choice_index(sorted_task_choices, edited_df)
+    now_task_default_index = get_default_task_choice_index(sorted_task_choices, edited_df)
     task_id_label = st.selectbox(
         "タスクIDを選択", sorted_task_choices, index=now_task_default_index,
         key="willdo_taskid_selectbox", label_visibility="collapsed"
@@ -459,7 +554,16 @@ def _render_add_task_controls(edited_df: pd.DataFrame) -> None:
 
 
 def _render_now_task_actions(now_count: int, edited_df: pd.DataFrame, selected_str: str) -> None:
-    # タイマー処理と実績記録処理とタスク追加処理を表示
+    """「今」タスク操作と追加・会議記録UIをまとめて表示する。
+
+    Args:
+        now_count (int): 状態が「今」の行数
+        edited_df (pd.DataFrame): 編集後のWill-doリストDataFrame
+        selected_str (str): yyMMdd形式の日付文字列
+
+    Returns:
+        なし
+    """
     if now_count == 0:
         st.write("「今」が選択されていません")
     elif now_count == 1:
@@ -489,6 +593,14 @@ def _render_now_task_actions(now_count: int, edited_df: pd.DataFrame, selected_s
 
 
 def _render_willdo_section(selected_str: str) -> None:
+    """Will-do一覧と関連操作エリア全体を表示する。
+
+    Args:
+        selected_str (str): yyMMdd形式の日付文字列
+
+    Returns:
+        なし
+    """
     willdo_file = resolve_willdo_file(selected_str)
     if os.path.exists(willdo_file):
         df_today = load_willdo_csv(willdo_file)
@@ -519,7 +631,14 @@ def _render_willdo_section(selected_str: str) -> None:
 
 
 def _render_willdo_init_section() -> None:
-    # Will-doリスト初期化操作を2カラムで表示（チェックボックス方式）
+    """Will-doリストの初期化操作UIを表示する。
+
+    Args:
+        なし
+
+    Returns:
+        なし
+    """
     st.markdown("#### Will-doリスト初期化", unsafe_allow_html=True)
     col_chk, col_exec = st.columns([2, 1])
 
@@ -552,7 +671,15 @@ def _render_willdo_init_section() -> None:
                 st.info("何も実行されませんでした。")
 
 
-if __name__ == "__main__":
+def run_app() -> None:
+    """Will-do画面全体を初期化して描画する。
+
+    Args:
+        なし
+
+    Returns:
+        なし
+    """
     st.set_page_config(layout="wide")
     task_view.task_sidebar()
 
@@ -562,3 +689,7 @@ if __name__ == "__main__":
 
     _render_willdo_section(selected_str)
     _render_willdo_init_section()
+
+
+if __name__ == "__main__":
+    run_app()
