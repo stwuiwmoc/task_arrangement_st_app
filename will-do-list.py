@@ -465,22 +465,33 @@ def _render_meeting_record_controls(selected_str: str) -> None:
     st.markdown("#### 打合せ実績を記録", unsafe_allow_html=True)
     order_labels, order_number_map = build_order_options()
 
-    meeting_name_input = st.text_input(
-        "会議名", key="willdo_meetingname", placeholder="会議名", label_visibility="collapsed")
-    col_record_meeting_order, col_record_meeting_radio = st.columns([6, 4])
-    with col_record_meeting_radio:
-        meeting_type = st.radio(
-            "打合せ種別",
-            ["突発", "予定"],
-            horizontal=True,
-            key="willdo_meeting_type_radio",
-            label_visibility="collapsed"
+    col_record_meeting_type, col_record_meeting_order = st.columns([3, 7])
+    with col_record_meeting_type:
+        is_meeting_planned = st.checkbox(
+            "予定の会議",
+            key="willdo_meeting_type",
         )
-        is_meeting_planned = meeting_type != "突発"
     with col_record_meeting_order:
         selected_label = st.selectbox(
             "オーダを選択", order_labels, key="willdo_order_selectbox", label_visibility="collapsed")
         order_input = order_number_map[selected_label]
+
+    col_record_discussion_person, col_record_meeting_name = st.columns([3, 7])
+    with col_record_discussion_person:
+        if not is_meeting_planned:
+            discussion_person_input = st.text_input(
+                "打合せ相手", key="willdo_discussion_person", placeholder="○○さん", label_visibility="collapsed")
+
+    with col_record_meeting_name:
+        meeting_name_input = st.text_input(
+            "会議名", key="willdo_meetingname", placeholder="会議名", label_visibility="collapsed")
+
+        if not is_meeting_planned:
+            if discussion_person_input:
+                meeting_name_input = discussion_person_input + "：" + meeting_name_input
+            else:
+                # 打合せ相手が未入力の場合は会議名を空にして、記録ボタン押下時に警告が出るようにする
+                meeting_name_input = ""
 
     col_record_achievement_minute, col_record_wraptime_minute, col_record_meeting_btn = st.columns([3, 3, 4])
     with col_record_achievement_minute:
@@ -511,7 +522,7 @@ def _render_meeting_record_controls(selected_str: str) -> None:
                     )
                     st.info("記録")
             else:
-                st.warning("会議名とオーダと分数を全て入力してください")
+                st.warning("空欄があります")
 
 
 def _render_add_task_controls(edited_df: pd.DataFrame) -> None:
