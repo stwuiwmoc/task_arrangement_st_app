@@ -278,7 +278,6 @@ if __name__ == "__main__":
         st.caption(
             f"対象期間：**{start_date.strftime('%Y/%m/%d')}** 〜"
             f" **{end_date.strftime('%Y/%m/%d')}**"
-            f"（サイドバーの期間クイック選択で変更可能）"
         )
 
     with c2:
