@@ -170,6 +170,33 @@ def render_calendar(blocks_df: pd.DataFrame, today: date):
                 padding: 0.2em 0.4em;
                 font-size: 0.85em;
             }
+            /* ホバー時にイベントのタイトル全文を折り返して重ね表示する。
+               FullCalendarはイベントにtitle属性を付与しないため、
+               attr(title)ではなくDOM上のタイトル文字列をそのまま展開する。
+               他イベントが押し下げられないよう、行の高さを固定して絶対配置にする */
+            .fc-daygrid-event-harness {
+                height: 25px;
+            }
+            .fc-daygrid-event-harness:hover {
+                z-index: 1000;
+            }
+            .fc-daygrid-event:hover {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                white-space: normal;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+            }
+            .fc-daygrid-dot-event:hover {
+                background: var(--fc-page-bg-color, #fff);
+            }
+            .fc-daygrid-event:hover .fc-event-title {
+                overflow: visible;
+                text-overflow: clip;
+                white-space: normal;
+                overflow-wrap: anywhere;
+            }
         """,
         callbacks=["eventClick"],
         key="forecast_calendar",
