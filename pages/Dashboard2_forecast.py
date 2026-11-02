@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import st_aggrid
 import streamlit as st
-from streamlit_calendar import calendar
+import streamlit_calendar
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models.Task_definition as Task_def
@@ -156,9 +156,21 @@ def render_calendar(blocks_df: pd.DataFrame, today: date):
         },
     }
 
-    state = calendar(
+    state = streamlit_calendar.calendar(
         events=events,
         options=calendar_options,
+        custom_css="""
+            .fc .fc-toolbar.fc-header-toolbar {
+                margin-bottom: 0.5em;
+            }
+            .fc .fc-toolbar-title {
+                font-size: 1rem;
+            }
+            .fc .fc-button {
+                padding: 0.2em 0.4em;
+                font-size: 0.85em;
+            }
+        """,
         callbacks=["eventClick"],
         key="forecast_calendar",
     )
