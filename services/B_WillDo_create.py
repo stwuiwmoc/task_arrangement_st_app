@@ -2,7 +2,7 @@ import os
 import re
 import shutil
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Dict, List
 
@@ -80,6 +80,58 @@ def add_WillDo_all_ProjectTasks() -> None:
     WillDo_df.to_csv(
         os.path.join("data", "WillDo", f"WillDo{ESS_dt_str}.csv"),
         index=False, encoding="utf-8-sig")
+
+    return WillDo_df
+
+
+def add_WillDo_overdue_or_no_deadline_ProjectTasks() -> pd.DataFrame:
+    """既存のWill-doリストを読み込んで、以下のいずれかに該当するActiveなProjectタスク全ての#000を追加する。
+    ・未完了サブタスクに、〆切日が実行日より過去のものが一つでもある
+    ・未完了サブタスクが1件以上あり、いずれにも〆切日が設定されていない
+    待機中かどうかは判定に含めない。直近〆切はNoneとして追加する。
+
+    Returns:
+        pd.DataFrame: 追加後のWill-doリスト
+
+    Raises:
+        ValueError: 対象タスクにサブタスクID #000 が存在しない場合。
+    """
+    ESS_dt = Task_def.get_ESS_dt()
+    today_str = ESS_dt.strftime('%Y-%m-%d')
+    ESS_dt_str = ESS_dt.strftime('%y%m%d')
+    willdo_file_path = os.path.join("data", "WillDo", f"WillDo{ESS_dt_str}.csv")
+    WillDo_df = pd.read_csv(willdo_file_path, encoding="utf-8-sig")
+
+    project_active_dir = os.path.join("data", "Project", "Active")
+    Project_tasks_dict = Task_def.read_all_task_csvs(project_active_dir)
+
+    new_entry_dicts = []
+    for task in Project_tasks_dict.values():
+        incomplete_df = task.sub_tasks[task.sub_tasks["is_incomplete"] == True]
+        if incomplete_df.empty:
+            continue
+        deadlines = incomplete_df["deadline_date"].dropna()
+        # 〆切超過（ISO形式のため文字列比較で可）または〆切未設定のいずれにも該当しなければ対象外
+        is_overdue = (deadlines < today_str).any()
+        has_no_deadline = deadlines.empty
+        if not (is_overdue or has_no_deadline):
+            continue
+
+        # サブタスクID #000 を直近〆切=Noneで追加（存在しない場合はID_to_WillDoEntryがValueError）
+        entry = replace(
+            ID_to_WillDoEntry(task.task_id, "#000"),
+            deadline_date_nearest=None)
+        new_entry_dicts.append({
+            Task_def.WillDoEntry.attr_map(k): v
+            for k, v in asdict(entry).items()})
+
+    if new_entry_dicts:
+        new_entries_df = pd.DataFrame(new_entry_dicts).reindex(columns=WillDo_df.columns)
+        # 空のDataFrameを除外してconcatすることでFutureWarningを回避
+        dfs = [df for df in [WillDo_df, new_entries_df] if not df.empty]
+        WillDo_df = pd.concat(dfs, ignore_index=True)
+
+    WillDo_df.to_csv(willdo_file_path, index=False, encoding="utf-8-sig")
 
     return WillDo_df
 
@@ -423,7 +475,7 @@ def ID_to_WillDoEntry(task_id: str, subtask_id: str) -> Task_def.WillDoEntry:
     task = Task_def.read_task_csv(os.path.join(folder_path, f"{task_id}.csv"))
     subtask_row = task.sub_tasks[task.sub_tasks["subtask_id"] == subtask_id]
     if subtask_row.empty:
-        raise ValueError(f"サブタスク {subtask_id} が見つかりません")
+        raise ValueError(f"{task_id} のサブタスク {subtask_id} が見つかりません")
     subtask = subtask_row.iloc[0]
 
     # オーダ情報を取得

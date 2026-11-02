@@ -658,11 +658,15 @@ def _render_willdo_init_section() -> None:
     if "willdo_chk_reset_id" not in st.session_state:
         st.session_state["willdo_chk_reset_id"] = 0
 
-    chk_daily = chk_project = False
+    chk_daily = chk_project = chk_deadline = False
     with col_chk:
         chk_daily = st.checkbox(
             "デイリータスクのみの新規Will-doリストを作成",
             key=f"willdo_chk_daily_{st.session_state['willdo_chk_reset_id']}"
+        )
+        chk_deadline = st.checkbox(
+            "〆切超過タスクをWill-doリストに追加",
+            key=f"willdo_chk_deadline_{st.session_state['willdo_chk_reset_id']}"
         )
         chk_project = st.checkbox(
             "プロジェクトタスクをWill-doリストに追加",
@@ -677,6 +681,9 @@ def _render_willdo_init_section() -> None:
                 st.rerun()
             elif chk_project:
                 Output_B.add_WillDo_all_ProjectTasks()
+                st.rerun()
+            elif chk_deadline:
+                Output_B.add_WillDo_overdue_or_no_deadline_ProjectTasks()
                 st.rerun()
             else:
                 st.info("何も実行されませんでした。")
