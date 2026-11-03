@@ -268,3 +268,64 @@ def test_add_WillDo_all_ProjectTasks(tmp_path):
         assert df.iloc[0]["サブ名"].startswith("サブタスクP")
     finally:
         os.chdir(old_cwd)
+
+
+def test_add_WillDo_overdue_or_no_deadline_ProjectTasks(tmp_path):
+    import pandas as pd
+    today = Task_def.get_ESS_dt().date()
+    past = (today - timedelta(days=3)).strftime("%Y-%m-%d")
+    future = (today + timedelta(days=3)).strftime("%Y-%m-%d")
+
+    project_active_dir = tmp_path / "data" / "Project" / "Active"
+    project_active_dir.mkdir(parents=True, exist_ok=True)
+    header = "タスク名\n{waiting}\nTEST-ORDER\n\n\n\n\n\n\n"
+    # 990001: 未完了の#001が〆切超過（待機中でも対象）
+    (project_active_dir / "990001.csv").write_text(
+        header.format(waiting=future)
+        + f"#000,常時,5,0,,,True,True,0,True\n#001,超過,5,0,{past},,True,True,1,True\n",
+        encoding="utf-8")
+    # 990002: 〆切超過は完了済サブタスクのみで、未完了に〆切なし -> 対象
+    (project_active_dir / "990002.csv").write_text(
+        header.format(waiting="")
+        + f"#000,常時,5,0,,,True,True,0,True\n#001,完了,5,0,{past},,True,True,1,False\n",
+        encoding="utf-8")
+    # 990003: 〆切が未来のみ -> 対象外
+    (project_active_dir / "990003.csv").write_text(
+        header.format(waiting="")
+        + f"#000,常時,5,0,,,True,True,0,True\n#001,未来,5,0,{future},,True,True,1,True\n",
+        encoding="utf-8")
+    # 990004: 未完了サブタスクに〆切が一つもない（待機中でも対象）
+    (project_active_dir / "990004.csv").write_text(
+        header.format(waiting=future)
+        + "#000,常時,5,0,,,True,True,0,True\n#001,〆切なし,5,0,,,True,True,1,True\n",
+        encoding="utf-8")
+    # 990005: 〆切ありは完了済（未来）のみで、未完了に〆切なし -> 対象
+    (project_active_dir / "990005.csv").write_text(
+        header.format(waiting="")
+        + f"#000,常時,5,0,,,True,True,0,True\n#001,完了,5,0,{future},,True,True,1,False\n",
+        encoding="utf-8")
+    # 990006: 未完了サブタスクが無い -> 対象外
+    (project_active_dir / "990006.csv").write_text(
+        header.format(waiting="")
+        + "#000,常時,5,0,,,True,True,0,False\n",
+        encoding="utf-8")
+
+    (tmp_path / "data" / "オーダ管理.csv").write_text(
+        "TEST-ORDER,PJ,ORD,テスト\n", encoding="utf-8")
+    willdo_dir = tmp_path / "data" / "WillDo"
+    willdo_dir.mkdir(parents=True, exist_ok=True)
+    WillDo_df = pd.DataFrame(
+        columns=[col.metadata["label"] for col in Task_def.WillDoEntry.__dataclass_fields__.values()])
+    willdo_file = willdo_dir / f"WillDo{Task_def.get_ESS_dt().strftime('%y%m%d')}.csv"
+    WillDo_df.to_csv(willdo_file, index=False, encoding="utf-8-sig")
+
+    old_cwd = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        Output_B.add_WillDo_overdue_or_no_deadline_ProjectTasks()
+        df = pd.read_csv(willdo_file, encoding="utf-8-sig", dtype=str)
+        assert sorted(df["タスクID"]) == ["990001", "990002", "990004", "990005"]
+        assert (df["サブID"] == "#000").all()
+        assert df["直近〆切"].isna().all()
+    finally:
+        os.chdir(old_cwd)
