@@ -685,7 +685,7 @@ def build_calendar_events(
             display_date, date_label = _shift_weekend_to_friday(deadline)
 
             events.append({
-                "title": f"{prefix}{block['タスク名']} / {block['〆切サブ名']}{date_label}",
+                "title": f"{prefix}{block['タスクID']}{block['〆切サブID']} {block['タスク名']} / {block['〆切サブ名']}{date_label}",
                 "start": display_date.strftime("%Y-%m-%d"),
                 "end": display_date.strftime("%Y-%m-%d"),
                 "allDay": True,
