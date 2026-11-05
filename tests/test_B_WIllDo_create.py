@@ -284,7 +284,7 @@ def test_add_WillDo_overdue_or_no_deadline_ProjectTasks(tmp_path):
         header.format(waiting=future)
         + f"#000,常時,5,0,,,True,True,0,True\n#001,超過,5,0,{past},,True,True,1,True\n",
         encoding="utf-8")
-    # 990002: 〆切超過は完了済サブタスクのみで、未完了に〆切なし -> 対象
+    # 990002: 〆切超過は完了済サブタスクのみで、#000以外に未完了なし -> 対象外
     (project_active_dir / "990002.csv").write_text(
         header.format(waiting="")
         + f"#000,常時,5,0,,,True,True,0,True\n#001,完了,5,0,{past},,True,True,1,False\n",
@@ -299,7 +299,7 @@ def test_add_WillDo_overdue_or_no_deadline_ProjectTasks(tmp_path):
         header.format(waiting=future)
         + "#000,常時,5,0,,,True,True,0,True\n#001,〆切なし,5,0,,,True,True,1,True\n",
         encoding="utf-8")
-    # 990005: 〆切ありは完了済（未来）のみで、未完了に〆切なし -> 対象
+    # 990005: 〆切ありは完了済（未来）のみで、#000以外に未完了なし -> 対象外
     (project_active_dir / "990005.csv").write_text(
         header.format(waiting="")
         + f"#000,常時,5,0,,,True,True,0,True\n#001,完了,5,0,{future},,True,True,1,False\n",
@@ -308,6 +308,11 @@ def test_add_WillDo_overdue_or_no_deadline_ProjectTasks(tmp_path):
     (project_active_dir / "990006.csv").write_text(
         header.format(waiting="")
         + "#000,常時,5,0,,,True,True,0,False\n",
+        encoding="utf-8")
+    # 990007: #000のみ（未完了・〆切なし） -> 対象外
+    (project_active_dir / "990007.csv").write_text(
+        header.format(waiting="")
+        + "#000,常時,5,0,,,True,True,0,True\n",
         encoding="utf-8")
 
     (tmp_path / "data" / "オーダ管理.csv").write_text(
@@ -324,7 +329,7 @@ def test_add_WillDo_overdue_or_no_deadline_ProjectTasks(tmp_path):
     try:
         Output_B.add_WillDo_overdue_or_no_deadline_ProjectTasks()
         df = pd.read_csv(willdo_file, encoding="utf-8-sig", dtype=str)
-        assert sorted(df["タスクID"]) == ["990001", "990002", "990004", "990005"]
+        assert sorted(df["タスクID"]) == ["990001", "990004"]
         assert (df["サブID"] == "#000").all()
         assert df["直近〆切"].isna().all()
     finally:
