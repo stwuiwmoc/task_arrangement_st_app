@@ -87,7 +87,8 @@ def add_WillDo_all_ProjectTasks() -> None:
 def add_WillDo_overdue_or_no_deadline_ProjectTasks() -> pd.DataFrame:
     """既存のWill-doリストを読み込んで、以下のいずれかに該当するActiveなProjectタスク全ての#000を追加する。
     ・未完了サブタスクに、〆切日が実行日より過去のものが一つでもある
-    ・未完了サブタスクが1件以上あり、いずれにも〆切日が設定されていない
+    ・#000以外で未完了サブタスクが1件以上あり、いずれにも〆切日が設定されていない
+    サブタスクが#000のみのタスクは、完了/未完了に関わらず対象外とする。
     待機中かどうかは判定に含めない。直近〆切はNoneとして追加する。
 
     Returns:
@@ -107,13 +108,20 @@ def add_WillDo_overdue_or_no_deadline_ProjectTasks() -> pd.DataFrame:
 
     new_entry_dicts = []
     for task in Project_tasks_dict.values():
+        # #000のみのタスクは完了/未完了に関わらず対象外
+        non_000_df = task.sub_tasks[task.sub_tasks["subtask_id"] != "#000"]
+        if non_000_df.empty:
+            continue
         incomplete_df = task.sub_tasks[task.sub_tasks["is_incomplete"] == True]
         if incomplete_df.empty:
             continue
         deadlines = incomplete_df["deadline_date"].dropna()
+        # 〆切未設定の判定は#000を除く未完了サブタスクが対象
+        non_000_incomplete_df = non_000_df[non_000_df["is_incomplete"] == True]
+        non_000_deadlines = non_000_incomplete_df["deadline_date"].dropna()
         # 〆切超過（ISO形式のため文字列比較で可）または〆切未設定のいずれにも該当しなければ対象外
         is_overdue = (deadlines < today_str).any()
-        has_no_deadline = deadlines.empty
+        has_no_deadline = (not non_000_incomplete_df.empty) and non_000_deadlines.empty
         if not (is_overdue or has_no_deadline):
             continue
 
